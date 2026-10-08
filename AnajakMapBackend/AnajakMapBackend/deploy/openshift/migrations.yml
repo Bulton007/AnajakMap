@@ -1,0 +1,324 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: identity-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/identity-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: identity-service-config
+            - secretRef:
+                name: identity-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: IDENTITY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trip-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/trip-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: trip-service-config
+            - secretRef:
+                name: trip-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: TRIP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ai-guide-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/ai-guide-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: ai-guide-service-config
+            - secretRef:
+                name: ai-guide-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: AI_GUIDE
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: discovery-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/discovery-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: discovery-service-config
+            - secretRef:
+                name: discovery-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: DISCOVERY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: expense-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/expense-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: expense-service-config
+            - secretRef:
+                name: expense-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: EXPENSE
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: reservation-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/reservation-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: reservation-service-config
+            - secretRef:
+                name: reservation-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: RESERVATION
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: journal-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/journal-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: journal-service-config
+            - secretRef:
+                name: journal-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: JOURNAL
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: notification-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/notification-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: notification-service-config
+            - secretRef:
+                name: notification-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: NOTIFICATION
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-migrate-v1
+  namespace: anajakmap
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/gateway-service:0.1.0
+          envFrom:
+            - configMapRef:
+                name: gateway-service-config
+            - secretRef:
+                name: gateway-migration-secrets
+          env:
+            - name: MIGRATE_ONLY
+              value: 'true'
+            - name: DB_USER
+              value: GATEWAY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 512Mi
+---

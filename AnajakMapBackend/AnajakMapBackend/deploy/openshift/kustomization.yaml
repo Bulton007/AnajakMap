@@ -1,0 +1,15 @@
+resources:
+  - namespace.yml
+  - identity-service.yml
+  - trip-service.yml
+  - ai-guide-service.yml
+  - discovery-service.yml
+  - expense-service.yml
+  - reservation-service.yml
+  - journal-service.yml
+  - notification-service.yml
+  - gateway-service.yml
+  - redis.yml
+  - rabbitmq.yml
+  - minio.yml
+  - route.yml

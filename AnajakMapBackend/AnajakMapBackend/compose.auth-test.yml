@@ -1,0 +1,21 @@
+# Explicit isolated email adapter for automated tests. Never include in normal startup.
+services:
+  mail-test-sink:
+    image: python:3.13-alpine
+    command: python /mail-test-sink.py
+    volumes:
+      - ./scripts/mail-test-sink.py:/mail-test-sink.py:ro
+    ports:
+      - '127.0.0.1:8095:8095'
+    environment:
+      MAIL_TEST_KEY: ${MAIL_TEST_KEY:?Set a random test-only key}
+  identity-service:
+    environment:
+      GMAIL_USERNAME: ''
+      GMAIL_APP_PASSWORD: ''
+      MAIL_PROVIDER_URL: http://mail-test-sink:8095
+      MAIL_PROVIDER_KEY: ${MAIL_TEST_KEY:?Set a random test-only key}
+      AUTH_TERMS_URL: https://example.test/terms
+      AUTH_PRIVACY_URL: https://example.test/privacy
+      AUTH_POLICY_VERSION: automated-test-only
+      AUTH_LINK_BASE: ''

@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yml
+  - oracle.yml
+  - redis.yml
+  - rabbitmq.yml
+  - minio.yml
+  - object-init.yml
+  - identity-service.yml
+  - trip-service.yml
+  - ai-guide-service.yml
+  - discovery-service.yml
+  - expense-service.yml
+  - reservation-service.yml
+  - journal-service.yml
+  - notification-service.yml
+  - gateway-service.yml
+configMapGenerator:
+  - name: oracle-scripts
+    namespace: anajakmap-local
+    files:
+      - oracle-scripts/01-schemas.sh
+      - oracle-scripts/grant-runtime.sh
+generatorOptions:
+  disableNameSuffixHash: true

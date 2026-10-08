@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notification-logs
+  namespace: anajakmap-local
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: anajakmap-local
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          imagePullPolicy: IfNotPresent
+          image: anajakmap-notification-service:latest
+          ports:
+            - containerPort: 8088
+          envFrom:
+            - configMapRef:
+                name: notification-service-config
+            - secretRef:
+                name: notification-service-secrets
+          env:
+            - name: DB_USER
+              value: NOTIFICATION_APP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: '1'
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8088
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8088
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8088
+            periodSeconds: 10
+          volumeMounts:
+            - name: logs
+              mountPath: /opt/anajakmap/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: notification-logs
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: anajakmap-local
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - port: 8088
+      targetPort: 8088
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: anajakmap-local
+data:
+  SPRING_PROFILES_ACTIVE: dev
+  SPRING_FLYWAY_ENABLED: "false"
+  DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=NOTIFICATION
+  DB_URL: jdbc:oracle:thin:@oracle:1521/FREEPDB1
+  REDIS_HOST: redis
+  RABBIT_HOST: rabbitmq
+  OBJECT_URL: http://minio:9000
+  TRIP_URL: http://trip-service:8082
+  AI_URL: http://ai-guide-service:8083
+  DISCOVERY_URL: http://discovery-service:8084

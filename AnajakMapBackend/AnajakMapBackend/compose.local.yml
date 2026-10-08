@@ -1,0 +1,28 @@
+services:
+  identity-service:
+    build:
+      dockerfile: Dockerfile.local
+  trip-service:
+    build:
+      dockerfile: Dockerfile.local
+  ai-guide-service:
+    build:
+      dockerfile: Dockerfile.local
+  discovery-service:
+    build:
+      dockerfile: Dockerfile.local
+  expense-service:
+    build:
+      dockerfile: Dockerfile.local
+  reservation-service:
+    build:
+      dockerfile: Dockerfile.local
+  journal-service:
+    build:
+      dockerfile: Dockerfile.local
+  notification-service:
+    build:
+      dockerfile: Dockerfile.local
+  gateway-service:
+    build:
+      dockerfile: Dockerfile.local

@@ -1,0 +1,106 @@
+server:
+  port: ${PORT:8089}
+spring:
+  servlet:
+    multipart:
+      enabled: false
+  application:
+    name: gateway-service
+  datasource:
+    url: ${DB_URL:jdbc:oracle:thin:@oracle:1521/FREEPDB1}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+      connection-init-sql: ${DB_INIT_SQL:SELECT 1 FROM dual}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      password: ${REDIS_PASSWORD}
+      timeout: 2s
+  rabbitmq:
+    host: ${RABBIT_HOST:rabbitmq}
+    username: ${RABBIT_USER}
+    password: ${RABBIT_PASSWORD}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 4
+          multiplier: 2
+          initial-interval: 1000
+          max-interval: 10000
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db,redis,rabbit,downstream
+      probes:
+        enabled: true
+anajak:
+  jwt-public-key: ${JWT_PUBLIC_KEY}
+  jwt-private-key: ${JWT_PRIVATE_KEY:}
+  service-token: ${SERVICE_TOKEN}
+  trip-url: ${TRIP_URL:http://trip-service:8082}
+  ai-url: ${AI_URL:http://ai-guide-service:8083}
+  discovery-url: ${DISCOVERY_URL:http://discovery-service:8084}
+  provider-url: ${PROVIDER_URL:}
+  provider-key: ${PROVIDER_KEY:}
+  object-url: ${OBJECT_URL:http://minio:9000}
+  object-region: ${OBJECT_REGION:us-east-1}
+  object-bucket: ${OBJECT_BUCKET:anajak-media}
+  object-access-key: ${OBJECT_ACCESS_KEY}
+  object-secret-key: ${OBJECT_SECRET_KEY}
+logging:
+  structured:
+    json:
+      add:
+        service: ${spring.application.name}
+    format:
+      console: logstash
+      file: logstash
+  file:
+    name: ${LOG_PATH:/tmp/logs}/gateway-service.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: identity
+        url: /v3/api-docs/identity
+      - name: trip
+        url: /v3/api-docs/trip
+      - name: ai-guide
+        url: /v3/api-docs/ai-guide
+      - name: discovery
+        url: /v3/api-docs/discovery
+      - name: expense
+        url: /v3/api-docs/expense
+      - name: reservation
+        url: /v3/api-docs/reservation
+      - name: journal
+        url: /v3/api-docs/journal
+      - name: notification
+        url: /v3/api-docs/notification

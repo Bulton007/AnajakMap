@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+VERSION=3.9.11
+BASE="${MAVEN_BOOTSTRAP_DIR:-/tmp/anajakmap-maven}"
+if [ ! -x "$BASE/apache-maven-$VERSION/bin/mvn" ]; then
+ mkdir -p "$BASE"
+ curl -fsSL "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/$VERSION/apache-maven-$VERSION-bin.tar.gz" -o "$BASE/maven.tar.gz"
+ tar -xzf "$BASE/maven.tar.gz" -C "$BASE"
+fi
+exec "$BASE/apache-maven-$VERSION/bin/mvn" "$@"

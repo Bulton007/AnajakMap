@@ -1,0 +1,14 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: anajakmap
+  namespace: anajakmap
+spec:
+  to:
+    kind: Service
+    name: gateway-service
+  port:
+    targetPort: 8089
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

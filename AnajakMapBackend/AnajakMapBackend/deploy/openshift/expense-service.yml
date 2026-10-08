@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: expense-logs
+  namespace: anajakmap
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: expense-service
+  namespace: anajakmap
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: expense-service
+  template:
+    metadata:
+      labels:
+        app: expense-service
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: image-registry.openshift-image-registry.svc:5000/anajakmap/expense-service:0.1.0
+          ports:
+            - containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: expense-service-config
+            - secretRef:
+                name: expense-service-secrets
+          env:
+            - name: DB_USER
+              value: EXPENSE_APP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: '1'
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8085
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8085
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8085
+            periodSeconds: 10
+          volumeMounts:
+            - name: logs
+              mountPath: /opt/anajakmap/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: expense-logs
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: expense-service
+  namespace: anajakmap
+spec:
+  selector:
+    app: expense-service
+  ports:
+    - port: 8085
+      targetPort: 8085
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: expense-service-config
+  namespace: anajakmap
+data:
+  SPRING_PROFILES_ACTIVE: production
+  SPRING_FLYWAY_ENABLED: "false"
+  DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=EXPENSE
+  DB_URL: jdbc:oracle:thin:@oracle.internal:1521/FREEPDB1
+  REDIS_HOST: redis
+  RABBIT_HOST: rabbitmq
+  OBJECT_URL: http://minio:9000
+  TRIP_URL: http://trip-service:8082
+  AI_URL: http://ai-guide-service:8083
+  DISCOVERY_URL: http://discovery-service:8084

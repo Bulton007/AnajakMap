@@ -1,0 +1,15 @@
+services:
+  minio:
+    image: anajakmap/minio:local-2025-04-22
+    build:
+      context: deploy/minio
+      args:
+        COMPONENT: minio
+        RELEASE: RELEASE.2025-04-22T22-12-26Z
+  object-init:
+    image: anajakmap/mc:local-2025-04-16
+    build:
+      context: deploy/minio
+      args:
+        COMPONENT: mc
+        RELEASE: RELEASE.2025-04-16T18-13-26Z
