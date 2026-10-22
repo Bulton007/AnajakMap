@@ -18,6 +18,8 @@ Read [AUTH_SETUP.md](AUTH_SETUP.md) for authentication and Gmail setup. Verifica
 
 Web uses port **7777**, matching the gateway's exact CORS allowlist. For an Android emulator use `powershell.exe -ExecutionPolicy Bypass -File run-connected.ps1 -Target android` (gateway host `10.0.2.2`). For production, configure an HTTPS gateway in a separate JSON file and use `--dart-define-from-file=...`. Never put backend passwords, private keys or service tokens in Flutter configuration.
 
+Without an explicit `API_BASE_URL`, Android now defaults to the emulator host at `http://10.0.2.2:8080/api/v1/`; web and iOS simulators default to localhost. Physical Android devices should use the USB helper below or a configured HTTPS server. Fully restart/rebuild the app after changing a compile-time API URL; hot reload does not change it.
+
 ### Samsung / physical Android over USB
 
 Start the backend, connect the unlocked phone with USB debugging enabled, and approve its computer authorization prompt. Then run:
@@ -27,11 +29,11 @@ cd C:\anajak_map\flutter_app
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-device.ps1
 ```
 
-The helper selects the single authorized Android device, checks gateway readiness, forwards the phone's localhost port 8080 to this computer, and launches connected mode. Keep USB connected; rerun after reconnecting. With multiple devices, pass `-DeviceId R5CW1048X8L` for this Samsung. It also sets a short Java socket directory for this process to avoid the local Windows Java loopback failure.
+The helper selects the single authorized Android device, checks gateway readiness, forwards the phone's localhost port to this computer, and rebuilds with the matching API URL. The port defaults to `GATEWAY_HTTP_PORT` or 8080; use `-BackendPort 8088` if your gateway runs on 8088. Keep USB connected; rerun after reconnecting. With multiple devices, pass `-DeviceId R5CW1048X8L` for this Samsung. The phone's Wi-Fi IP is not the backend address, and `10.0.2.2` works only in an emulator. It also sets a short Java socket directory for this process to avoid the local Windows Java loopback failure.
 
 To run native integration checks, pass `-Test -TestConfig config/auth-test.local.json` containing a dedicated, already verified test account as described in `AUTH_SETUP.md`. Tests create travel records, use a separate secure-storage key and cache scope, and clean their local credentials/cache. After testing, rerun without `-Test` to restore the normal app.
 
-Set `MAP_TILE_URL` and `MAP_ATTRIBUTION` for an approved tile provider. Without them the map explains configuration requirements; real place lists still come from the API. Offline downloads do not bulk-download map tiles.
+Mobile maps now use OpenStreetMap without a key or billing account. See [OPENSTREETMAP_SETUP.md](OPENSTREETMAP_SETUP.md). Google Maps is inactive. Offline downloads do not download map tiles.
 
 ## Architecture
 
@@ -46,6 +48,10 @@ Set `MAP_TILE_URL` and `MAP_ATTRIBUTION` for an approved tile provider. Without 
 See [INTEGRATION.md](../INTEGRATION.md) for the feature/API matrix, setup boundaries and verification. See [Kubernetes setup](../AnajakMapBackend/AnajakMapBackend/deploy/kubernetes/README.md) for the portable local manifests. No remote cluster is modified by generation/rendering commands.
 
 ## Checks
+
+The connected game icon opens the account RPG MVP. See [RPG_SETUP.md](RPG_SETUP.md)
+for server practice, destination safety gates, battle rules, Oracle persistence,
+tests and the remaining 3D/advanced-game stages. Device-only practice stays separate.
 
 ```powershell
 flutter analyze

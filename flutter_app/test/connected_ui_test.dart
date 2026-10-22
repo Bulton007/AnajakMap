@@ -40,6 +40,7 @@ void main() {
     'connected trip requires explicit approval and displays server errors',
     (tester) async {
       var drafts = 0, approvals = 0;
+      final generationKeys = <String>[];
       final dio = Dio();
       final trip = {
         'id': 'trip',
@@ -76,7 +77,22 @@ void main() {
           return response([]);
         }
         if (r.path == 'guide/itinerary-jobs') {
-          return response({'jobId': 'job', 'status': 'QUEUED'});
+          generationKeys.add(r.headers['Idempotency-Key'].toString());
+          return response({
+            'jobId': generationKeys.length == 1 ? 'failed-job' : 'job',
+            'status': 'QUEUED',
+          });
+        }
+        if (r.path == 'guide/jobs/failed-job') {
+          return response({
+            'job': {
+              'ID': 'failed-job',
+              'TRIP_ID': 'trip',
+              'STATUS': 'FAILED',
+              'ERROR_CODE': 'PROVIDER_FAILURE',
+            },
+            'result': {},
+          });
         }
         if (r.path == 'guide/jobs/job') {
           return response({
@@ -142,7 +158,18 @@ void main() {
       expect(find.text('Request itinerary'), findsOneWidget);
       await tester.tap(find.text('Request itinerary'));
       await tester.pumpAndSettle();
+      expect(find.text('Generation failed'), findsOneWidget);
+      expect(find.text('Back to my trip'), findsOneWidget);
+      expect(drafts, 0);
+      expect(approvals, 0);
+      await tester.ensureVisible(find.text('Try again'));
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+      expect(generationKeys.length, 2);
+      expect(generationKeys[0], isNot(generationKeys[1]));
       expect(find.text('Royal Palace'), findsOneWidget);
+      expect(find.textContaining('Generation request:'), findsNothing);
+      expect(find.text('Your itinerary is ready to review'), findsOneWidget);
       expect(drafts, 0);
       expect(approvals, 0);
       await tester.ensureVisible(find.text('Approve itinerary'));

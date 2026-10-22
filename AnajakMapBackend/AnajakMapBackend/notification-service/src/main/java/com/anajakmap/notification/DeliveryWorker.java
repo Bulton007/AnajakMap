@@ -80,7 +80,7 @@ public class DeliveryWorker {
         String delivery = UUID.randomUUID().toString();
         jdbc.update(
             "INSERT INTO deliveries(id,owner_id,title,due_at,status,next_attempt)"
-                + " VALUES(?,?,?,SYSTIMESTAMP,'PENDING',SYSTIMESTAMP)",
+                + " VALUES(?,?,?,CURRENT_TIMESTAMP,'PENDING',CURRENT_TIMESTAMP)",
             delivery,
             recipient,
             kind.equals("group.invited")
@@ -99,16 +99,16 @@ public class DeliveryWorker {
   public void deliver() {
     jdbc.update(
         "UPDATE deliveries SET status=CASE WHEN attempts>=5 THEN 'DEAD' ELSE 'PENDING'"
-            + " END,next_attempt=SYSTIMESTAMP,updated_at=SYSTIMESTAMP WHERE status='SENDING' AND"
-            + " updated_at<SYSTIMESTAMP-NUMTODSINTERVAL(120,'SECOND')");
+            + " END,next_attempt=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE status='SENDING' AND"
+            + " updated_at<CURRENT_TIMESTAMP-NUMTODSINTERVAL(120,'SECOND')");
     var rows =
         jdbc.queryForList(
             "SELECT id,owner_id,title,attempts FROM deliveries WHERE status='PENDING' AND"
-                + " next_attempt<=SYSTIMESTAMP FETCH FIRST 20 ROWS ONLY");
+                + " next_attempt<=CURRENT_TIMESTAMP FETCH FIRST 20 ROWS ONLY");
     for (var r : rows) {
       String id = r.get("ID").toString();
       if (jdbc.update(
-              "UPDATE deliveries SET status='SENDING',attempts=attempts+1,updated_at=SYSTIMESTAMP WHERE id=? AND"
+              "UPDATE deliveries SET status='SENDING',attempts=attempts+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND"
                   + " status='PENDING'",
               id)
           != 1) continue;
@@ -133,14 +133,14 @@ public class DeliveryWorker {
               .toBodilessEntity();
         }
         jdbc.update(
-            "UPDATE deliveries SET status=?,delivered_at=SYSTIMESTAMP WHERE id=?",
+            "UPDATE deliveries SET status=?,delivered_at=CURRENT_TIMESTAMP WHERE id=?",
             dev ? "MOCK_DELIVERED" : "DELIVERED",
             id);
       } catch (Exception e) {
         int n = ((Number) r.get("ATTEMPTS")).intValue() + 1;
         jdbc.update(
             "UPDATE deliveries SET"
-                + " status=?,attempts=?,next_attempt=SYSTIMESTAMP+NUMTODSINTERVAL(?,'SECOND') WHERE"
+                + " status=?,attempts=?,next_attempt=CURRENT_TIMESTAMP+NUMTODSINTERVAL(?,'SECOND') WHERE"
                 + " id=?",
             n >= 5 ? "DEAD" : "PENDING",
             n,

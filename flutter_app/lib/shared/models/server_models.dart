@@ -48,8 +48,9 @@ class GenerationJob {
       tripId = string(object(json['job']), 'tripId'),
       status = string(object(json['job']), 'status'),
       error = string(object(json['job']), 'errorCode'),
+      retryAt = string(object(json['job']), 'retryAt'),
       result = Map.unmodifiable(object(json['result']));
-  final String id, tripId, status, error;
+  final String id, tripId, status, error, retryAt;
   final Json result;
   bool get finished => status == 'SUCCEEDED' || status == 'FAILED';
   List<ServerActivity> get activities =>

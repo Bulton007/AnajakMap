@@ -5,6 +5,8 @@ import '../../app/localization/strings.dart';
 import '../../core/storage/app_state.dart';
 import '../../shared/components/components.dart';
 import '../../shared/models/travel.dart';
+import '../rpg/rpg_screen.dart';
+import '../maps/open_map_screen.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -31,6 +33,7 @@ class _ExploreState extends ConsumerState<ExploreScreen> {
         .toList();
     return PageBody(
       children: [
+        const RpgEntry(),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -89,15 +92,7 @@ class _ExploreState extends ConsumerState<ExploreScreen> {
         ),
         const SizedBox(height: 22),
         if (map)
-          EmptyState(
-            title: context.t('mapTitle'),
-            body: context.t('mapBody'),
-            icon: Icons.map_outlined,
-            action: FilledButton(
-              onPressed: () => setState(() => map = false),
-              child: Text(context.t('backToList')),
-            ),
-          )
+          const SizedBox(height: 440, child: TravelOpenMap())
         else ...[
           if (places.isEmpty)
             EmptyState(

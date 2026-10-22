@@ -1,0 +1,46 @@
+# Laptop testing overlay. Only Nginx and the existing USB gateway bind localhost.
+x-persistent: &persistent
+  restart: unless-stopped
+  logging:
+    driver: local
+    options: {max-size: "10m", max-file: "3"}
+services:
+  oracle: {<<: *persistent}
+  redis: {<<: *persistent}
+  rabbitmq: {<<: *persistent}
+  minio: {<<: *persistent}
+  identity-service: {<<: *persistent}
+  trip-service: {<<: *persistent}
+  ai-guide-service: {<<: *persistent}
+  discovery-service:
+    <<: *persistent
+    environment:
+      RPG_SIMULATION_ENABLED: "false"
+  expense-service: {<<: *persistent}
+  reservation-service: {<<: *persistent}
+  journal-service: {<<: *persistent}
+  notification-service: {<<: *persistent}
+  gateway-service:
+    <<: *persistent
+    environment:
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+  nginx:
+    <<: *persistent
+    image: nginx:stable-alpine
+    user: "101:101"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    depends_on: [gateway-service]
+    ports: ["127.0.0.1:${LAPTOP_NGINX_PORT:-8090}:8080"]
+    volumes: ["./deploy/laptop/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    read_only: true
+    tmpfs: ["/var/cache/nginx:rw,nosuid,mode=1777,size=32m", "/var/run:rw,nosuid,mode=1777,size=1m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

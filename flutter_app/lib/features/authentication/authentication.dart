@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../rpg/rpg_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -170,6 +171,9 @@ class _AuthenticationState extends ConsumerState<AuthenticationScreen> {
                 ],
                 if (configuration.hasValue && !config.emailDelivery && !success)
                   AuthInlineFeedback(context.a('authUnavailable')),
+                if (registering &&
+                    config.policyVersion.startsWith('local-test-'))
+                  AuthInlineFeedback(context.a('authLocalTest')),
                 if (success) ...[
                   AuthInlineFeedback(
                     context.a(
@@ -382,6 +386,7 @@ class AuthGuestScreen extends StatelessWidget {
         const SizedBox(height: 16),
         AuthInlineFeedback(context.a('authGuestInfo')),
         Text(context.a('authGuestDescription')),
+        const RpgEntry(),
         const SizedBox(height: 24),
         AuthPrimaryButton(
           label: context.a('authSignIn'),

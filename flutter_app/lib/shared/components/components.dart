@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../app/localization/strings.dart';
@@ -20,7 +21,17 @@ class PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const PageStorageKey('page-scroll'),
-    padding: EdgeInsets.fromLTRB(padding, 12, padding, 32),
+    // Scroll beneath the glass bar, but let the last control clear it fully.
+    padding: EdgeInsets.fromLTRB(
+      padding,
+      12,
+      padding,
+      32 +
+          math.max(
+            MediaQuery.viewPaddingOf(context).bottom,
+            MediaQuery.paddingOf(context).bottom,
+          ),
+    ),
     child: Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(

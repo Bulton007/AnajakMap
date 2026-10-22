@@ -20,6 +20,9 @@ class TravelRepository {
 
   Future<Json> runtime() async =>
       object(await client.request('GET', 'runtime'));
+  Future<Json> recommendations(Json preferences) async => object(
+    await client.request('POST', 'guide/recommendations', body: preferences),
+  );
   Future<Json> profile() async =>
       object(await client.request('GET', 'profile'));
   Future<Json> preferences(Json preferences, int version) async => object(

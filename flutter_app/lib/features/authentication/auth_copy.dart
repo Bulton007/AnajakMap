@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../../app/localization/strings.dart';
 
 const _copy = <String, List<String>>{
+  'authLocalTest': [
+    'Local testing only, ages 18+. These policies are drafts. Use your own test email and avoid sensitive travel data. Email verification is real.',
+    'សម្រាប់សាកល្បងក្នុងម៉ាស៊ីនប៉ុណ្ណោះ អាយុ ១៨ ឆ្នាំឡើង។ គោលការណ៍ទាំងនេះជាសេចក្តីព្រាង។ ប្រើអ៊ីមែលសាកល្បងរបស់អ្នក និងកុំបញ្ចូលទិន្នន័យធ្វើដំណើររសើប។ ការផ្ទៀងផ្ទាត់អ៊ីមែលគឺពិតប្រាកដ។',
+  ],
   'authHero': [
     'Go somewhere that stays with you.',
     'ធ្វើដំណើរទៅកន្លែងដែលដក់ជាប់ក្នុងចិត្ត។',

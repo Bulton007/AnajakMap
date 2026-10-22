@@ -4,6 +4,7 @@ import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/providers.dart';
 import '../../shared/components/components.dart';
+import '../../shared/components/anajak_bottom_bar.dart';
 import '../../shared/components/remote.dart';
 import '../authentication/authentication.dart';
 import '../authentication/auth_controller.dart';
@@ -12,6 +13,8 @@ import 'connected_trips.dart';
 import 'connected_explore.dart';
 import 'connected_tools.dart';
 import 'connected_offline.dart';
+import '../rpg/rpg_screen.dart';
+import 'package:go_router/go_router.dart';
 
 class ConnectedGate extends ConsumerWidget {
   const ConnectedGate({super.key});
@@ -41,9 +44,24 @@ class _ConnectedShellState extends ConsumerState<ConnectedShell> {
   int tab = 0;
   @override
   Widget build(BuildContext context) => Scaffold(
+    extendBody: true,
     appBar: AppBar(
       title: Text(context.t('appName')),
       actions: [
+        IconButton(
+          tooltip: 'OpenStreetMap',
+          onPressed: () => context.push('/map'),
+          icon: const Icon(Icons.map_outlined),
+        ),
+        IconButton(
+          tooltip: rpgText(
+            context,
+            'Creature trails',
+            'ដំណើរស្វែងរកសត្វវេទមន្ត',
+          ),
+          onPressed: () => context.push('/adventure'),
+          icon: const Icon(Icons.sports_esports_outlined),
+        ),
         IconButton(
           tooltip: context.t('language'),
           onPressed: () => showPreferences(context),
@@ -52,6 +70,7 @@ class _ConnectedShellState extends ConsumerState<ConnectedShell> {
       ],
     ),
     body: SafeArea(
+      bottom: false,
       child: Column(
         children: [
           if (widget.profile['offlineSession'] == true)
@@ -71,19 +90,9 @@ class _ConnectedShellState extends ConsumerState<ConnectedShell> {
         ],
       ),
     ),
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: tab,
-      onDestinationSelected: (i) => setState(() => tab = i),
-      destinations: [
-        for (final item in [
-          ('home', Icons.home_outlined),
-          ('trips', Icons.work_outline),
-          ('explore', Icons.explore_outlined),
-          ('ai', Icons.auto_awesome_outlined),
-          ('profile', Icons.person_outline),
-        ])
-          NavigationDestination(icon: Icon(item.$2), label: context.t(item.$1)),
-      ],
+    bottomNavigationBar: AnajakBottomBar(
+      index: tab,
+      onTap: (i) => setState(() => tab = i),
     ),
   );
 }

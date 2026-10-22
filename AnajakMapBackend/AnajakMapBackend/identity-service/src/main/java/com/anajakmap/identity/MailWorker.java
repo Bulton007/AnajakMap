@@ -50,9 +50,9 @@ public class MailWorker {
   }
   @Scheduled(fixedDelay = 30000)
   public void run() {
-    jdbc.update("DELETE FROM mail_delivery WHERE expires_at<=SYSTIMESTAMP OR sent=1");
+    jdbc.update("DELETE FROM mail_delivery WHERE expires_at<=CURRENT_TIMESTAMP OR sent=1");
     if (!config.enabled()) return;
-    var rows = jdbc.queryForList("SELECT id,recipient,kind,secret_value FROM mail_delivery WHERE sent=0 AND attempts<5 AND expires_at>SYSTIMESTAMP FETCH FIRST 10 ROWS ONLY");
+    var rows = jdbc.queryForList("SELECT id,recipient,kind,secret_value FROM mail_delivery WHERE sent=0 AND attempts<5 AND expires_at>CURRENT_TIMESTAMP FETCH FIRST 10 ROWS ONLY");
     for (var row : rows) {
       String id = row.get("ID").toString();
       try {

@@ -1,3 +1,4 @@
+import '../../shared/formatting/travel_dates.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../../core/network/api_client.dart';
 import '../../core/network/providers.dart';
 import '../../shared/components/components.dart';
 import '../../shared/components/remote.dart';
+import '../../shared/components/travel_panels.dart';
 import '../../shared/models/server_models.dart';
 import 'connected_trips.dart';
 
@@ -38,7 +40,8 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
   List<ServerActivity> activities = [];
   List<Json> reservations = [];
   Set<int> selected = {};
-  final requestKey = ApiClient.operationId(), saveKey = ApiClient.operationId();
+  String requestKey = ApiClient.operationId();
+  final saveKey = ApiClient.operationId();
   final cancel = CancelToken();
   String source = '';
   @override
@@ -66,6 +69,7 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
   }
 
   Future<void> start() async {
+    if (busy || polling) return;
     setState(() {
       busy = true;
       error = null;
@@ -145,6 +149,70 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
     }
     if (mounted) {
       setState(() => polling = false);
+    }
+  }
+
+  Future<void> resumeSavedRequest() async {
+    final scope =
+        '${ref.read(environmentProvider).normalizedUrl}|${widget.profile['id']}';
+    final saved = await runRequest(
+      context,
+      () => ref.read(databaseProvider).cachedEntries(scope, 'job:'),
+    );
+    if (!mounted || saved == null) return;
+    final requests = saved
+        .where(
+          (entry) =>
+              string(object(entry['data']), 'tripId') == widget.trip.id &&
+              object(entry['data'])['replan'] == widget.replan,
+        )
+        .toList();
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (c) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  c.t('jobRecovery'),
+                  style: Theme.of(c).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                if (requests.isEmpty)
+                  VisualEmpty(
+                    icon: Icons.history,
+                    title: c.t('noSavedRequests'),
+                  ),
+                for (final entry in requests)
+                  ListTile(
+                    leading: const Icon(Icons.auto_awesome),
+                    title: Text(widget.trip.title),
+                    subtitle: Text(
+                      travelDateTime(
+                        string(entry, 'savedAt'),
+                        zone: widget.trip.timezone,
+                        locale: c.isKhmer ? 'km' : 'en',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward),
+                    onTap: () => Navigator.pop(
+                      c,
+                      string(object(entry['data']), 'jobId'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (chosen != null && mounted) {
+      setState(() => jobId = chosen);
+      await poll();
     }
   }
 
@@ -271,13 +339,11 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
       ),
       body: PageBody(
         children: [
-          Text(
-            widget.trip.title,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${widget.trip.destination} · ${widget.trip.startDate} – ${widget.trip.endDate}',
+          TravelHero(
+            title: widget.trip.title,
+            subtitle:
+                '${widget.trip.destination} · ${travelDateRange(widget.trip.startDate, widget.trip.endDate, locale: context.isKhmer ? 'km' : 'en')}',
+            icon: Icons.auto_awesome,
           ),
           const SizedBox(height: 16),
           Notice(context.t('aiTrustBody'), icon: Icons.verified_user_outlined),
@@ -289,24 +355,18 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
               label: Text(context.t(busy ? 'loading' : 'generateNow')),
             ),
             TextButton(
-              onPressed: () =>
-                  remoteForm(context, 'jobRecovery', [
-                    const InputSpec('jobId'),
-                  ], submit: (body, _) async => body).then((result) {
-                    if (result is Map && mounted) {
-                      jobId = result['jobId'];
-                      poll();
-                    }
-                  }),
+              onPressed: busy ? null : resumeSavedRequest,
               child: Text(context.t('jobRecovery')),
             ),
           ],
           if (jobId != null) ...[
-            SelectableText('${context.t('jobId')}: $jobId'),
-            const SizedBox(height: 12),
+            GenerationStatusPanel(
+              status: job?.status ?? 'QUEUED',
+              waiting: polling,
+              failureCode: job?.error ?? '',
+              retryAt: job?.retryAt ?? '',
+            ),
             if (polling) ...[
-              const LinearProgressIndicator(),
-              Text(context.t('jobPending')),
               TextButton(
                 onPressed: () => setState(() => stopped = true),
                 child: Text(context.t('stopWaiting')),
@@ -318,26 +378,88 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
                 child: Text(context.t('checkJob')),
               ),
           ],
+          if (job?.status == 'FAILED') ...[
+            FilledButton.icon(
+              onPressed:
+                  busy ||
+                      (job?.error == 'AI_RATE_LIMITED' &&
+                          (DateTime.tryParse(
+                                job?.retryAt ?? '',
+                              )?.isAfter(DateTime.now().toUtc()) ??
+                              false))
+                  ? null
+                  : () {
+                      setState(() {
+                        jobId = null;
+                        job = null;
+                        error = null;
+                        requestKey = ApiClient.operationId();
+                      });
+                      start();
+                    },
+              icon: const Icon(Icons.refresh),
+              label: Text(context.t('retry')),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => openScreen(
+                context,
+                ConnectedTripDetail(
+                  tripId: widget.trip.id,
+                  profile: widget.profile,
+                ),
+              ),
+              icon: const Icon(Icons.luggage_outlined),
+              label: Text(context.t('backToTrip')),
+            ),
+          ],
           if (error != null) ...[
             const SizedBox(height: 16),
             Notice('$error', error: true),
           ],
-          if (job?.status == 'FAILED')
-            Notice('${context.t('jobFailed')}: ${job!.error}', error: true),
           if (activities.isNotEmpty) ...[
-            Section(context.t('source')),
-            Text(source.isEmpty ? context.t('sourceUnknown') : source),
-            if (job != null)
-              ServerResult({
-                for (final key in ['updatedAt', 'estimate', 'mock'])
-                  if (job!.result.containsKey(key)) key: job!.result[key],
-              }),
+            ExpansionTile(
+              key: const PageStorageKey('generation-source'),
+              leading: const Icon(Icons.verified_user_outlined),
+              title: Text(context.t('source')),
+              childrenPadding: const EdgeInsets.all(16),
+              children: [
+                Text(source.isEmpty ? context.t('sourceUnknown') : source),
+              ],
+            ),
+            if (job?.result['mock'] == true)
+              Notice(context.t('mock'), icon: Icons.science_outlined),
+            if (job?.result['estimate'] == true)
+              IconFact(Icons.info_outline, context.t('estimate')),
             if (widget.replan) ...[
               Section(context.t('before')),
-              for (final a in widget.current) _Activity(a),
+              for (final a in widget.current)
+                _Activity(a, widget.trip.timezone),
               Notice(context.t('replanReview')),
               Section(context.t('reservations')),
-              ServerResult(reservations),
+              if (reservations.isEmpty)
+                VisualEmpty(
+                  icon: Icons.confirmation_number_outlined,
+                  title: context.t('empty'),
+                ),
+              for (final reservation in reservations)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: IconFact(
+                      Icons.confirmation_number_outlined,
+                      string(
+                        reservation,
+                        'title',
+                        string(
+                          reservation,
+                          'provider',
+                          context.t('reservations'),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
             Section(context.t('after')),
             for (var i = 0; i < activities.length; i++)
@@ -381,7 +503,7 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
                           },
                   ),
                   subtitle: Text(
-                    '${activities[i].startsAt} – ${activities[i].endsAt}\n${activities[i].source}',
+                    '${travelTimeRange(activities[i].startsAt, activities[i].endsAt, zone: widget.trip.timezone, locale: context.isKhmer ? 'km' : 'en')}\n${activities[i].source}',
                   ),
                 ),
               ),
@@ -437,13 +559,24 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
 }
 
 class _Activity extends StatelessWidget {
-  const _Activity(this.activity);
+  const _Activity(this.activity, this.zone);
+  final String zone;
   final ServerActivity activity;
   @override
   Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 12),
     child: ListTile(
+      contentPadding: const EdgeInsets.all(16),
+      leading: const Icon(Icons.schedule_rounded),
       title: Text(activity.title),
-      subtitle: Text('${activity.startsAt} – ${activity.endsAt}'),
+      subtitle: Text(
+        travelTimeRange(
+          activity.startsAt,
+          activity.endsAt,
+          zone: zone,
+          locale: context.isKhmer ? 'km' : 'en',
+        ),
+      ),
     ),
   );
 }

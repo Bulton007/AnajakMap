@@ -1,3 +1,6 @@
+import '../../shared/formatting/travel_dates.dart';
+import 'package:go_router/go_router.dart';
+import '../../shared/components/visual.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/localization/strings.dart';
@@ -136,7 +139,9 @@ class _ConnectedTripsState extends ConsumerState<ConnectedTrips> {
         children: [
           Expanded(
             child: Text(
-              context.t(widget.home ? 'homeTitle' : 'tripsTitle'),
+              widget.home
+                  ? '${context.isKhmer ? 'សួស្ដី' : 'Hello'}, ${string(widget.profile, 'name', context.t('appName'))}'
+                  : context.t('tripsTitle'),
               style: Theme.of(context).textTheme.headlineLarge,
             ),
           ),
@@ -162,28 +167,42 @@ class _ConnectedTripsState extends ConsumerState<ConnectedTrips> {
       ),
       const SizedBox(height: 20),
       if (widget.home) ...[
-        Photo(
-          height: 210,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Text(
-                context.t('cambodia'),
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineMedium!.copyWith(color: Colors.white),
-              ),
+        VisualHero(
+          title: context.t('homeTitle'),
+          caption: context.t('cambodia'),
+          action: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFF8DB9B),
+              foregroundColor: const Color(0xFF0C2926),
             ),
+            onPressed: create,
+            icon: const Icon(Icons.add),
+            label: Text(context.t('createTrip')),
           ),
+        ),
+        const SizedBox(height: 16),
+        VisualActions(
+          children: [
+            VisualAction(
+              icon: Icons.map_rounded,
+              label: context.t('map'),
+              onTap: () => context.push('/map'),
+            ),
+            VisualAction(
+              icon: Icons.pets_rounded,
+              label: context.isKhmer ? 'ដំណើរសត្វវេទមន្ត' : 'Creature trails',
+              onTap: () => context.push('/adventure'),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
       ],
-      FilledButton.icon(
-        onPressed: create,
-        icon: const Icon(Icons.add),
-        label: Text(context.t('createTrip')),
-      ),
+      if (!widget.home)
+        FilledButton.icon(
+          onPressed: create,
+          icon: const Icon(Icons.add),
+          label: Text(context.t('createTrip')),
+        ),
       const SizedBox(height: 18),
       if (error != null) ...[
         Notice('$error', error: true),
@@ -201,11 +220,10 @@ class _ConnectedTripsState extends ConsumerState<ConnectedTrips> {
       for (final trip in trips)
         Padding(
           padding: const EdgeInsets.only(top: 12),
-          child: ActionCard(
-            icon: Icons.work_outline,
+          child: DestinationCard(
             title: trip.title,
             subtitle:
-                '${trip.destination} · ${trip.startDate} – ${trip.endDate}',
+                '${trip.destination} · ${travelDateRange(trip.startDate, trip.endDate, locale: context.isKhmer ? 'km' : 'en')}',
             onTap: () => openScreen(
               context,
               ConnectedTripDetail(tripId: trip.id, profile: widget.profile),
@@ -260,7 +278,9 @@ class ConnectedTripDetail extends ConsumerWidget {
           children: [
             Text(trip.title, style: Theme.of(context).textTheme.headlineLarge),
             const SizedBox(height: 8),
-            Text('${trip.destination} · ${trip.startDate} – ${trip.endDate}'),
+            Text(
+              '${trip.destination} · ${travelDateRange(trip.startDate, trip.endDate, locale: context.isKhmer ? 'km' : 'en')}',
+            ),
             Text(trip.timezone),
             const SizedBox(height: 18),
             Wrap(
@@ -277,6 +297,7 @@ class ConnectedTripDetail extends ConsumerWidget {
                   'contacts',
                 ])
                   ActionChip(
+                    avatar: Icon(featureIcon(tool), size: 20),
                     label: Text(context.t(tool)),
                     onPressed: () => openScreen(
                       context,
@@ -284,6 +305,10 @@ class ConnectedTripDetail extends ConsumerWidget {
                     ),
                   ),
                 ActionChip(
+                  avatar: const Icon(
+                    Icons.download_for_offline_rounded,
+                    size: 20,
+                  ),
                   label: Text(context.t('offline')),
                   onPressed: () => openScreen(
                     context,
@@ -305,10 +330,14 @@ class ConnectedTripDetail extends ConsumerWidget {
             if (activities.isEmpty) Text(context.t('empty')),
             for (final a in activities)
               Card(
+                margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(16),
+                  leading: const Icon(Icons.schedule_rounded),
                   title: Text(a.title),
-                  subtitle: Text('${a.startsAt} – ${a.endsAt}\n${a.source}'),
+                  subtitle: Text(
+                    '${travelTimeRange(a.startsAt, a.endsAt, zone: trip.timezone, locale: context.isKhmer ? 'km' : 'en')}\n${a.source}',
+                  ),
                   trailing: IconButton(
                     tooltip: context.t('confirm'),
                     icon: const Icon(Icons.thumb_up_outlined),

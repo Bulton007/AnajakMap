@@ -14,11 +14,15 @@ import '../../features/profile/gallery.dart';
 import '../../features/trips/trip_tools.dart';
 import '../../features/translation/translation.dart';
 import '../../shared/components/components.dart';
+import '../../shared/components/anajak_bottom_bar.dart';
 import '../localization/strings.dart';
 import '../../core/network/providers.dart';
 import '../../features/connected/connected_shell.dart';
 import '../../features/authentication/authentication.dart';
 import '../../features/authentication/auth_controller.dart';
+import '../../features/rpg/rpg_screen.dart';
+import '../../features/rpg/adventure_screen.dart';
+import '../../features/maps/open_map_screen.dart';
 
 class _RouterRefresh extends ChangeNotifier {
   void refresh() => notifyListeners();
@@ -35,6 +39,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       redirect: (_, state) =>
           authRedirect(ref.read(authControllerProvider), state.uri),
       routes: [
+        GoRoute(
+          path: '/adventure',
+          builder: (_, s) => AdventureScreen(
+            destinationId: s.uri.queryParameters['destination'],
+          ),
+        ),
+        GoRoute(path: '/rpg', builder: (_, s) => const RpgScreen()),
+        GoRoute(path: '/map', builder: (_, s) => const OpenMapScreen()),
         GoRoute(path: '/auth', builder: (_, s) => const AuthenticationScreen()),
         GoRoute(path: '/guest', builder: (_, s) => const AuthGuestScreen()),
         GoRoute(path: '/connected', builder: (_, s) => const ConnectedGate()),
@@ -48,6 +60,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         ? '/home'
         : '/welcome',
     routes: [
+      GoRoute(
+        path: '/adventure',
+        builder: (_, s) => AdventureScreen(
+          destinationId: s.uri.queryParameters['destination'],
+        ),
+      ),
+      GoRoute(path: '/rpg', builder: (_, s) => const RpgScreen()),
+      GoRoute(path: '/map', builder: (_, s) => const OpenMapScreen()),
       GoRoute(path: '/welcome', builder: (_, s) => const OnboardingScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
@@ -133,6 +153,7 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final offline = ref.watch(appStateProvider.select((s) => s.offline));
     return Scaffold(
+      extendBody: true,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -146,37 +167,10 @@ class AppShell extends ConsumerWidget {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        onDestinationSelected: (i) =>
+      bottomNavigationBar: AnajakBottomBar(
+        index: shell.currentIndex,
+        onTap: (i) =>
             shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home_rounded),
-            label: context.t('home'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.work_outline_rounded),
-            selectedIcon: const Icon(Icons.work_rounded),
-            label: context.t('trips'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.explore_outlined),
-            selectedIcon: const Icon(Icons.explore),
-            label: context.t('explore'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.auto_awesome_outlined),
-            selectedIcon: const Icon(Icons.auto_awesome),
-            label: context.t('ai'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline_rounded),
-            selectedIcon: const Icon(Icons.person),
-            label: context.t('profile'),
-          ),
-        ],
       ),
     );
   }

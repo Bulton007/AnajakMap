@@ -28,4 +28,4 @@ if [ "$ANJ_ORACLE_FILE" = compose.yml ]; then
 else
  docker compose -f compose.yml -f "$ANJ_ORACLE_FILE" -f compose.local.yml -f compose.runtime.yml up -d
 fi
-printf 'AnajakMap is starting at http://127.0.0.1:8080. Run python3 scripts/smoke.py after readiness is UP.\n'
+printf 'AnajakMap is starting at http://127.0.0.1:%s. Wait for /actuator/health/readiness.\n' "${GATEWAY_HTTP_PORT:-8080}"

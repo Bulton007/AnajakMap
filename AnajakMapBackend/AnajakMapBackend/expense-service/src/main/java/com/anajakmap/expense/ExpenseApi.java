@@ -52,7 +52,7 @@ public class ExpenseApi {
         s -> {
           int n =
               jdbc.update(
-                  "UPDATE budgets SET amount=?,currency=?,version=version+1,updated_at=SYSTIMESTAMP"
+                  "UPDATE budgets SET amount=?,currency=?,version=version+1,updated_at=CURRENT_TIMESTAMP"
                       + " WHERE trip_id=? AND version=?",
                   r.amount,
                   r.currency,

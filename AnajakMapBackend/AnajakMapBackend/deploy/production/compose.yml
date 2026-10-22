@@ -1,0 +1,180 @@
+name: anajakmap-production
+x-app: &app
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: ["/tmp:rw,nosuid,size=128m", "/opt/anajakmap/logs:rw,nosuid,size=128m"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  mem_limit: 768m
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "3"
+  depends_on:
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+x-env: &env
+  SPRING_PROFILES_ACTIVE: prod
+  SPRING_FLYWAY_ENABLED: "false"
+  SPRINGDOC_API_DOCS_ENABLED: "false"
+  SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health
+  DB_URL: ${DB_URL:?Configure private Oracle connection}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Set Redis password}
+  RABBIT_USER: anajak
+  RABBIT_PASSWORD: ${RABBIT_PASSWORD:?Set RabbitMQ password}
+  JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?Set JWT verification key}
+  SERVICE_TOKEN: ${SERVICE_TOKEN:?Set service token}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?Set data encryption key}
+  OBJECT_URL: ${OBJECT_URL:?Configure maintained private S3-compatible storage}
+  OBJECT_REGION: ${OBJECT_REGION:-us-east-1}
+  OBJECT_BUCKET: ${OBJECT_BUCKET:?Set private bucket}
+  OBJECT_ACCESS_KEY: ${OBJECT_ACCESS_KEY:?Set scoped storage access key}
+  OBJECT_SECRET_KEY: ${OBJECT_SECRET_KEY:?Set scoped storage secret}
+services:
+  edge:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Configure public API domain}
+      ACME_EMAIL: ${ACME_EMAIL:?Set certificate contact email}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [gateway-service]
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass $$REDIS_PASSWORD"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set Redis password}
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  rabbitmq:
+    image: rabbitmq:4.1-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: anajak
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?Set RabbitMQ password}
+    volumes: ["rabbit-data:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+  identity-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/identity-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: IDENTITY_APP
+      DB_PASSWORD: ${IDENTITY_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=IDENTITY
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?Set signing key}
+      GMAIL_USERNAME: ${GMAIL_USERNAME:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      MAIL_PROVIDER_URL: ${MAIL_PROVIDER_URL:-}
+      MAIL_PROVIDER_KEY: ${MAIL_PROVIDER_KEY:-}
+      AUTH_TERMS_URL: ${AUTH_TERMS_URL:?Set public Terms URL}
+      AUTH_PRIVACY_URL: ${AUTH_PRIVACY_URL:?Set public Privacy URL}
+      AUTH_POLICY_VERSION: ${AUTH_POLICY_VERSION:?Set reviewed policy version}
+      AUTH_LINK_BASE: ${AUTH_LINK_BASE:-}
+  trip-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/trip-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: TRIP_APP
+      DB_PASSWORD: ${TRIP_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=TRIP
+      CALENDAR_PROVIDER_URL: ${CALENDAR_PROVIDER_URL:-}
+      CALENDAR_PROVIDER_KEY: ${CALENDAR_PROVIDER_KEY:-}
+  ai-guide-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/ai-guide-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: AI_GUIDE_APP
+      DB_PASSWORD: ${AI_GUIDE_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=AI_GUIDE
+      PROVIDER_URL: ${AI_PROVIDER_URL:?Configure real AI adapter}
+      PROVIDER_KEY: ${AI_PROVIDER_KEY:?Configure AI adapter credential}
+  discovery-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/discovery-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: DISCOVERY_APP
+      DB_PASSWORD: ${DISCOVERY_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=DISCOVERY
+      PHOTON_BASE_URL: ${PHOTON_BASE_URL:?Configure approved Photon endpoint}
+      RPG_SIMULATION_ENABLED: "false"
+      PROVIDER_URL: ${DISCOVERY_PROVIDER_URL:?Configure live discovery adapter}
+      PROVIDER_KEY: ${DISCOVERY_PROVIDER_KEY:?Configure discovery adapter credential}
+  expense-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/expense-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: EXPENSE_APP
+      DB_PASSWORD: ${EXPENSE_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=EXPENSE
+      CURRENCY_PROVIDER_URL: ${CURRENCY_PROVIDER_URL:?Configure currency adapter}
+      CURRENCY_PROVIDER_KEY: ${CURRENCY_PROVIDER_KEY:?Configure currency credential}
+  reservation-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/reservation-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: RESERVATION_APP
+      DB_PASSWORD: ${RESERVATION_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=RESERVATION
+  journal-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/journal-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: JOURNAL_APP
+      DB_PASSWORD: ${JOURNAL_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=JOURNAL
+  notification-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/notification-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: NOTIFICATION_APP
+      DB_PASSWORD: ${NOTIFICATION_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=NOTIFICATION
+      PROVIDER_URL: ${PUSH_PROVIDER_URL:?Configure push adapter}
+      PROVIDER_KEY: ${PUSH_PROVIDER_KEY:?Configure push credential}
+  gateway-service:
+    <<: *app
+    image: ${IMAGE_PREFIX:?Set image repository}/gateway-service:${IMAGE_TAG:?Set immutable release tag}
+    environment:
+      <<: *env
+      DB_USER: GATEWAY_APP
+      DB_PASSWORD: ${GATEWAY_APP_PASSWORD:?Set runtime password}
+      DB_INIT_SQL: ALTER SESSION SET CURRENT_SCHEMA=GATEWAY
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8089/actuator/health/readiness | grep -q UP"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+volumes:
+  caddy-data:
+  caddy-config:
+  redis-data:
+  rabbit-data:

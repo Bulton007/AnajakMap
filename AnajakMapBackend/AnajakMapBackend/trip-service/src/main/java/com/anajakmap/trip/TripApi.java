@@ -420,7 +420,7 @@ public class TripApi {
     if (r.enabled)
       jdbc.update(
           "INSERT INTO shared_locations(trip_id,account_id,latitude,longitude,expires_at)"
-              + " VALUES(?,?,?,?,SYSTIMESTAMP+NUMTODSINTERVAL(300,'SECOND'))",
+              + " VALUES(?,?,?,?,CURRENT_TIMESTAMP+NUMTODSINTERVAL(300,'SECOND'))",
           id,
           jwt.getSubject(),
           r.latitude,
@@ -434,7 +434,7 @@ public class TripApi {
     require(id, jwt.getSubject(), false);
     return jdbc.queryForList(
         "SELECT account_id,latitude,longitude,expires_at FROM shared_locations WHERE trip_id=? AND"
-            + " expires_at>SYSTIMESTAMP",
+            + " expires_at>CURRENT_TIMESTAMP",
         id);
   }
 

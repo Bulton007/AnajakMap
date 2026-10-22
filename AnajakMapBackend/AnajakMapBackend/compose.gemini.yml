@@ -1,0 +1,7 @@
+# Opt in after configuring a server-side key. No fixture fallback for this service.
+services:
+  ai-guide-service:
+    environment:
+      AI_PROVIDER: gemini
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Configure server-side Gemini key}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}

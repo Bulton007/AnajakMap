@@ -1,0 +1,14 @@
+# Activate together with prod; no development adapters.
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL}
+    hikari:
+      schema: ${DB_SCHEMA:gateway}
+      connection-init-sql: SELECT 1
+      maximum-pool-size: 2
+      minimum-idle: 0
+  flyway:
+    locations: classpath:db/postgresql
+    default-schema: ${DB_SCHEMA:gateway}
+    create-schemas: false

@@ -1,0 +1,21 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        -Server
+    }
+    request_body {
+        max_size 11MB
+    }
+    @api path /api/v1/*
+    handle @api {
+        reverse_proxy gateway-service:8089
+    }
+    handle {
+        respond "Not found" 404
+    }
+}

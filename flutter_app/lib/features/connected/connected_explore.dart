@@ -1,3 +1,6 @@
+import '../maps/search_results.dart';
+import 'discovery_details.dart';
+import '../../shared/components/visual.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/localization/strings.dart';
@@ -8,6 +11,9 @@ import '../../shared/components/remote.dart';
 import '../../shared/models/server_models.dart';
 import 'connected_generation.dart';
 import 'connected_map.dart';
+import 'package:go_router/go_router.dart';
+import '../rpg/rpg_screen.dart';
+import 'recommendations.dart';
 
 Future<ServerTrip?> selectTrip(BuildContext context, WidgetRef ref) async {
   final trips = await runRequest(
@@ -49,7 +55,20 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
   final query = TextEditingController(text: 'Phnom Penh');
   List<Json> places = [];
   bool busy = false, more = false;
-  int page = 0;
+  int page = 0, requestVersion = 0;
+  String submittedQuery = '';
+  void changed(String _) {
+    requestVersion++;
+    setState(() {
+      places = [];
+      more = false;
+      busy = false;
+      error = null;
+      submittedQuery = '';
+    });
+    ref.read(searchResultsProvider.notifier).replace([]);
+  }
+
   Object? error;
   @override
   void initState() {
@@ -64,29 +83,66 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
   }
 
   Future<void> search({bool append = false}) async {
+    final term = query.text.trim();
+    if (term.isEmpty) {
+      changed('');
+      return;
+    }
+    final version = ++requestVersion;
     setState(() {
       busy = true;
       error = null;
+      if (!append) {
+        places = [];
+        more = false;
+      }
     });
     try {
       final result = await ref
           .read(repositoryProvider)
-          .places(query.text.trim(), page: append ? page : 0);
-      if (mounted) {
+          .places(term, page: append ? page : 0);
+      if (mounted && version == requestVersion) {
         setState(() {
           places = append ? [...places, ...result] : result;
           page = append ? page + 1 : 1;
           more = result.length == 20;
           busy = false;
+          submittedQuery = term;
         });
+        ref.read(searchResultsProvider.notifier).replace(places);
+        loadPhotos(term, page - 1, version);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && version == requestVersion) {
         setState(() {
           error = e;
           busy = false;
         });
       }
+    }
+  }
+
+  Future<void> loadPhotos(String term, int resultPage, int version) async {
+    try {
+      final photos = object(
+        await ref.read(repositoryProvider).discovery('photos', {
+          'query': term,
+          'page': resultPage,
+        }),
+      );
+      if (!mounted || version != requestVersion) return;
+      setState(() {
+        places = [
+          for (final p in places)
+            if (photos[p['id']] is Map)
+              {...p, 'photo': object(photos[p['id']])}
+            else
+              p,
+        ];
+      });
+      ref.read(searchResultsProvider.notifier).replace(places);
+    } catch (_) {
+      // Optional photos must never hide otherwise usable search results.
     }
   }
 
@@ -100,6 +156,8 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
       const SizedBox(height: 18),
       TextField(
         controller: query,
+        onChanged: changed,
+        textInputAction: TextInputAction.search,
         onSubmitted: (_) => search(),
         decoration: InputDecoration(
           labelText: context.t('search'),
@@ -115,6 +173,14 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
         spacing: 8,
         runSpacing: 8,
         children: [
+          ActionChip(
+            avatar: const Icon(Icons.travel_explore, size: 20),
+            label: Text(context.t('recommendTitle')),
+            onPressed: () => openScreen(
+              context,
+              TripRecommendations(profile: widget.profile),
+            ),
+          ),
           for (final key in [
             'food',
             'culture',
@@ -123,26 +189,37 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
             'transport',
           ])
             ActionChip(
+              avatar: Icon(featureIcon(key), size: 20),
               label: Text(context.t(key)),
-              onPressed: () => openScreen(
-                context,
-                Scaffold(
-                  appBar: AppBar(title: Text(context.t(key))),
-                  body: RemoteContent<Object?>(
-                    load: () => ref.read(repositoryProvider).discovery(key, {
-                      'query': query.text,
-                    }),
-                    builder: (result, _) =>
-                        PageBody(children: [ServerResult(result)]),
-                  ),
-                ),
-              ),
+              onPressed: busy || submittedQuery.isEmpty
+                  ? null
+                  : () => openScreen(
+                      context,
+                      Scaffold(
+                        appBar: AppBar(title: Text(context.t(key))),
+                        body: RemoteContent<Object?>(
+                          load: () => ref.read(repositoryProvider).discovery(
+                            key,
+                            {'query': submittedQuery},
+                          ),
+                          builder: (result, _) => DiscoveryDetails(
+                            operation: key,
+                            query: submittedQuery,
+                            data: result,
+                          ),
+                        ),
+                      ),
+                    ),
             ),
           ActionChip(
+            avatar: const Icon(Icons.map_rounded, size: 20),
             label: Text(context.t('map')),
-            onPressed: () => openScreen(context, ConnectedMap(places: places)),
+            onPressed: places.isEmpty
+                ? null
+                : () => openScreen(context, ConnectedMap(places: places)),
           ),
           ActionChip(
+            avatar: const Icon(Icons.bookmark_rounded, size: 20),
             label: Text(context.t('savedPlaces')),
             onPressed: () => openScreen(
               context,
@@ -181,15 +258,26 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
       const SizedBox(height: 20),
       if (busy) const LinearProgressIndicator(),
       if (error != null) Notice('$error', error: true),
-      if (!busy && places.isEmpty)
+      if (!busy && places.isEmpty && error == null)
         EmptyState(title: context.t('noResults'), body: context.t('trySearch')),
+      if (places.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            '${context.isKhmer ? 'លទ្ធផល' : 'Results for'} $submittedQuery · © OpenStreetMap contributors',
+          ),
+        ),
       for (final place in places)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: ActionCard(
-            icon: Icons.location_on_outlined,
+          child: DestinationCard(
             title: string(place, 'name'),
-            subtitle: string(place, 'source', context.t('sourceUnknown')),
+            photo: place['photo'] is Map ? object(place['photo']) : null,
+            subtitle: string(
+              place,
+              'address',
+              string(place, 'source', context.t('sourceUnknown')),
+            ),
             onTap: () => openScreen(
               context,
               ConnectedPlace(place: place, profile: widget.profile),
@@ -218,7 +306,21 @@ class ConnectedPlace extends ConsumerWidget {
           style: Theme.of(context).textTheme.headlineLarge,
         ),
         const SizedBox(height: 18),
-        ServerResult(place),
+        PlaceFacts(place: place),
+        const SizedBox(height: 18),
+        if (place['rpgEligible'] != false)
+          OutlinedButton.icon(
+            onPressed: () => context.push(
+              Uri(
+                path: '/adventure',
+                queryParameters: {'destination': string(place, 'id')},
+              ).toString(),
+            ),
+            icon: const Icon(Icons.auto_awesome),
+            label: Text(
+              rpgText(context, 'Explore creature trails', 'ស្វែងរកសត្វវេទមន្ត'),
+            ),
+          ),
         const SizedBox(height: 18),
         FilledButton.icon(
           onPressed: () async {

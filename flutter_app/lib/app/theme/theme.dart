@@ -19,24 +19,62 @@ abstract final class Tokens {
   static const target = 48.0;
   static const motion = Duration(milliseconds: 220);
 
+  static ({Color background, Color foreground}) accent(
+    BuildContext context,
+    int index,
+  ) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    const lightPairs = [
+      (Color(0xFFE3F1FF), Color(0xFF164E7A)),
+      (Color(0xFFFFE8DE), Color(0xFF8C3926)),
+      (Color(0xFFEFE5FF), Color(0xFF50348B)),
+      (Color(0xFFFFF0C7), Color(0xFF6E4B00)),
+      (Color(0xFFDDF5ED), Color(0xFF145B49)),
+      (Color(0xFFFCE5F1), Color(0xFF84315D)),
+    ];
+    const darkPairs = [
+      (Color(0xFF213B55), Color(0xFFC4E6FF)),
+      (Color(0xFF512F2A), Color(0xFFFFD8C8)),
+      (Color(0xFF382E54), Color(0xFFE7D6FF)),
+      (Color(0xFF493C22), Color(0xFFFFE6A5)),
+      (Color(0xFF203E38), Color(0xFFBDEFE0)),
+      (Color(0xFF482B40), Color(0xFFFFD1E9)),
+    ];
+    final pair = (dark
+        ? darkPairs
+        : lightPairs)[index.abs() % lightPairs.length];
+    return (background: pair.$1, foreground: pair.$2);
+  }
+
   static ThemeData theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     final scheme =
         ColorScheme.fromSeed(
-          seedColor: forest,
+          seedColor: const Color(0xFF244D3E),
           brightness: brightness,
         ).copyWith(
-          primary: dark ? lime : forest,
-          onPrimary: dark ? ink : Colors.white,
+          primary: dark ? const Color(0xFFB6DCC3) : const Color(0xFF244D3E),
+          onPrimary: dark ? const Color(0xFF123629) : Colors.white,
           secondaryContainer: dark
-              ? const Color(0xFF334938)
-              : const Color(0xFFEAF0DF),
-          surface: dark ? const Color(0xFF18231E) : const Color(0xFFFFFEFA),
-          onSurface: dark ? const Color(0xFFE8EEE2) : ink,
-          onSurfaceVariant: dark ? const Color(0xFFB9C4B7) : muted,
+              ? const Color(0xFF493C22)
+              : const Color(0xFFFFF0C7),
+          onSecondaryContainer: dark
+              ? const Color(0xFFFFE6A5)
+              : const Color(0xFF6E4B00),
+          tertiaryContainer: dark
+              ? const Color(0xFF213B55)
+              : const Color(0xFFE3F1FF),
+          onTertiaryContainer: dark
+              ? const Color(0xFFC4E6FF)
+              : const Color(0xFF164E7A),
+          surface: dark ? const Color(0xFF182B23) : const Color(0xFFFFFEF9),
+          onSurface: dark ? const Color(0xFFEAF2E9) : const Color(0xFF202E27),
+          onSurfaceVariant: dark
+              ? const Color(0xFFBECDBF)
+              : const Color(0xFF536862),
           outlineVariant: dark
-              ? const Color(0xFF36443A)
-              : const Color(0xFFE1E5D9),
+              ? const Color(0xFF3A4D41)
+              : const Color(0xFFCDD8D1),
         );
     final base = ThemeData(
       useMaterial3: true,
@@ -45,7 +83,9 @@ abstract final class Tokens {
       brightness: brightness,
     );
     return base.copyWith(
-      scaffoldBackgroundColor: dark ? const Color(0xFF111B16) : cream,
+      scaffoldBackgroundColor: dark
+          ? const Color(0xFF0E1D16)
+          : const Color(0xFFF6F5EE),
       textTheme: base.textTheme.copyWith(
         headlineLarge: base.textTheme.headlineLarge!.copyWith(
           fontSize: 34,
@@ -73,7 +113,9 @@ abstract final class Tokens {
         bodySmall: base.textTheme.bodySmall!.copyWith(height: 1.6),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: dark ? const Color(0xFF111B16) : cream,
+        backgroundColor: dark
+            ? const Color(0xFF0E1D16)
+            : const Color(0xFFF6F5EE),
         scrolledUnderElevation: 0,
         centerTitle: false,
       ),

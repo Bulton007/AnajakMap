@@ -1,3 +1,5 @@
+import '../../shared/components/visual.dart';
+import '../../shared/components/travel_panels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,6 +13,7 @@ import '../../shared/components/remote.dart';
 import 'connected_upload.dart';
 import 'connected_explore.dart';
 import 'connected_generation.dart';
+import 'recommendations.dart';
 
 class ConnectedTools extends ConsumerStatefulWidget {
   const ConnectedTools({
@@ -301,7 +304,13 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
       load: load,
       builder: (data, _) => PageBody(
         children: [
-          if (widget.trip != null) ...[
+          if (widget.tool == 'calendar' && widget.trip != null)
+            TravelHero(
+              title: widget.trip!.title,
+              subtitle: context.t('calendarJourney'),
+              icon: Icons.calendar_month_outlined,
+            )
+          else if (widget.trip != null) ...[
             Text(
               widget.trip!.title,
               style: Theme.of(context).textTheme.headlineMedium,
@@ -538,6 +547,8 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                 ),
               ),
             if (objects(data).isEmpty) Text(context.t('empty')),
+          ] else if (widget.tool == 'calendar') ...[
+            CalendarPanel(data: object(data), zone: widget.trip!.timezone),
           ] else ...[
             const SizedBox(height: 16),
             ServerResult(data),
@@ -628,38 +639,59 @@ class CompanionTasks extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => PageBody(
     children: [
-      Text(
-        context.t('aiTitle'),
-        style: Theme.of(context).textTheme.headlineLarge,
+      TravelHero(
+        title: context.t('aiTitle'),
+        subtitle: context.t('tagline'),
+        icon: Icons.auto_awesome,
       ),
       const SizedBox(height: 16),
       Notice(context.t('aiTrustBody')),
       const SizedBox(height: 20),
-      for (final task in ['generate', 'translate', 'vision', 'voice', 'chat'])
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: ActionCard(
-            icon: Icons.auto_awesome_outlined,
-            title: context.t(task),
-            subtitle: context.t('aiSubtitle'),
-            onTap: () async {
-              if (task == 'generate') {
-                final trip = await selectTrip(context, ref);
-                if (trip != null && context.mounted) {
-                  openScreen(
-                    context,
-                    ConnectedGeneration(trip: trip, profile: profile),
-                  );
-                }
-              } else {
-                openScreen(
-                  context,
-                  AssistanceTask(task: task, profile: profile),
-                );
-              }
-            },
+      VisualActions(
+        children: [
+          VisualAction(
+            icon: Icons.travel_explore,
+            label: context.t('recommendTitle'),
+            subtitle: context.t('recommendCardBody'),
+            onTap: () =>
+                openScreen(context, TripRecommendations(profile: profile)),
           ),
-        ),
+          for (final task in [
+            'generate',
+            'translate',
+            'vision',
+            'voice',
+            'chat',
+          ])
+            VisualAction(
+              icon: featureIcon(task),
+              label: context.t(task),
+              subtitle: task == 'vision' || task == 'voice'
+                  ? (Localizations.localeOf(context).languageCode == 'km'
+                        ? 'មិនទាន់មាននៅឡើយ'
+                        : 'Not available yet')
+                  : null,
+              onTap: task == 'vision' || task == 'voice'
+                  ? null
+                  : () async {
+                      if (task == 'generate') {
+                        final trip = await selectTrip(context, ref);
+                        if (trip != null && context.mounted) {
+                          openScreen(
+                            context,
+                            ConnectedGeneration(trip: trip, profile: profile),
+                          );
+                        }
+                      } else {
+                        openScreen(
+                          context,
+                          AssistanceTask(task: task, profile: profile),
+                        );
+                      }
+                    },
+            ),
+        ],
+      ),
     ],
   );
 }
@@ -680,9 +712,16 @@ class _AssistanceState extends ConsumerState<AssistanceTask> {
     appBar: AppBar(title: Text(context.t(widget.task))),
     body: PageBody(
       children: [
+        TravelHero(
+          title: context.t(widget.task),
+          subtitle: context.t(
+            widget.task == 'translate' ? 'translateBody' : 'aiSubtitle',
+          ),
+          icon: featureIcon(widget.task),
+        ),
         Notice(context.t('aiTrustBody')),
         const SizedBox(height: 20),
-        FilledButton(
+        FilledButton.icon(
           onPressed: () async {
             final repo = ref.read(repositoryProvider);
             if (widget.task == 'vision' || widget.task == 'voice') {
@@ -734,7 +773,14 @@ class _AssistanceState extends ConsumerState<AssistanceTask> {
               }
             }
           },
-          child: Text(
+          icon: Icon(
+            widget.task == 'translate'
+                ? Icons.translate
+                : widget.task == 'chat'
+                ? Icons.chat_bubble_outline
+                : featureIcon(widget.task),
+          ),
+          label: Text(
             context.t(
               widget.task == 'vision' || widget.task == 'voice'
                   ? 'chooseFile'
@@ -744,7 +790,7 @@ class _AssistanceState extends ConsumerState<AssistanceTask> {
         ),
         const SizedBox(height: 20),
         if (result != null) ...[
-          ServerResult(result),
+          CompanionAnswer(data: object(result)),
           const SizedBox(height: 16),
           if (widget.task == 'translate')
             OutlinedButton(

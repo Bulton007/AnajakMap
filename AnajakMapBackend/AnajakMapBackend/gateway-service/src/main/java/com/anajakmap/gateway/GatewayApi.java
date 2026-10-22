@@ -36,7 +36,7 @@ public class GatewayApi {
           case "auth", "profile" -> "identity";
           case "trips" -> "trip";
           case "guide" -> "ai-guide";
-          case "discovery" -> "discovery";
+          case "discovery", "rpg" -> "discovery";
           case "expenses" -> "expense";
           case "reservations" -> "reservation";
           case "journal" -> "journal";
@@ -64,7 +64,7 @@ public class GatewayApi {
                     base
                         + path
                         + (request.getQueryString() == null ? "" : "?" + request.getQueryString())))
-            .timeout(Duration.ofSeconds(30));
+            .timeout(Duration.ofSeconds(service.equals("ai-guide") ? 55 : 30));
     for (String h : List.of("Authorization", "Content-Type", "Idempotency-Key", "If-Match")) {
       String v = request.getHeader(h);
       if (v != null) builder.header(h, v);

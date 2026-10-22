@@ -4,6 +4,7 @@ import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
 import '../models/server_models.dart';
 import 'components.dart';
+import '../formatting/travel_dates.dart';
 
 class RemoteContent<T> extends StatefulWidget {
   const RemoteContent({super.key, required this.load, required this.builder});
@@ -422,7 +423,11 @@ class ServerResult extends StatelessWidget {
                         ],
                       )
                     : SelectableText(
-                        '${context.t(label(e.key.toString()))}: ${e.value}',
+                        '${context.t(label(e.key.toString()))}: ${['startsAt', 'endsAt', 'createdAt', 'updatedAt', 'completedAt'].contains(label(e.key.toString())) && e.value is String
+                            ? travelDateTime(e.value, locale: context.isKhmer ? 'km' : 'en')
+                            : ['startDate', 'endDate'].contains(label(e.key.toString())) && e.value is String
+                            ? travelDate(e.value, locale: context.isKhmer ? 'km' : 'en')
+                            : e.value}',
                       ),
               ),
         ],

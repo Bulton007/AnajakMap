@@ -1,0 +1,2 @@
+// Copy to Maps.local.xcconfig; use a separate iOS-restricted key.
+MAPS_API_KEY = YOUR_IOS_MAPS_KEY

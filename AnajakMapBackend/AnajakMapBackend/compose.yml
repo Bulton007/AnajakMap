@@ -318,7 +318,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - gateway-logs:/opt/anajakmap/logs
-    ports: ["127.0.0.1:8080:8089"]
+    ports: ["127.0.0.1:${GATEWAY_HTTP_PORT:-8080}:8089"]
 volumes:
   oracle-data:
   redis-data:

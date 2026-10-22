@@ -24,4 +24,8 @@ public interface GuideProvider {
       Map<String, Object> trip, Map<String, Object> preferences, List<Map<String, Object>> places);
 
   Map<String, Object> perform(String operation, Map<String, Object> input);
+
+  default List<Map<String,Object>> recommend(List<Map<String,Object>> places, List<String> interests, String language) {
+    throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "AI recommendations are not configured");
+  }
 }

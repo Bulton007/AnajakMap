@@ -12,6 +12,8 @@
 .agents/
 .aws/
 **/local.properties
+**/maps.local.properties
+**/Maps.local.xcconfig
 **/key.properties
 *.pem
 *.key

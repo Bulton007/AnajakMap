@@ -6,11 +6,21 @@ import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.web.client.RestClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Configuration
 public class GuideAdapters {
   @Bean
+  @ConditionalOnProperty(name = "AI_PROVIDER", havingValue = "gemini")
+  GuideProvider gemini(@Value("${GEMINI_API_KEY:}") String key,
+      @Value("${GEMINI_MODEL:gemini-3.8-flash}") String model) {
+    return new GeminiGuideProvider(key, model,
+        HttpClients.client("https://generativelanguage.googleapis.com", Duration.ofSeconds(45)));
+  }
+
+  @Bean
   @Profile({"dev", "test"})
+  @ConditionalOnProperty(name = "AI_PROVIDER", havingValue = "fixture", matchIfMissing = true)
   GuideProvider mock() {
     return new GuideProvider() {
       public Result itinerary(
@@ -107,6 +117,7 @@ public class GuideAdapters {
 
   @Bean
   @Profile("!dev & !test")
+  @ConditionalOnProperty(name = "AI_PROVIDER", havingValue = "adapter", matchIfMissing = true)
   GuideProvider live(
       @Value("${anajak.provider-url}") String url, @Value("${anajak.provider-key}") String key) {
     if (url.isBlank() || key.isBlank())

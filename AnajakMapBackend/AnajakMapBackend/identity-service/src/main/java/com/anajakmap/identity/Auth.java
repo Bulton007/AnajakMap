@@ -148,7 +148,7 @@ public class Auth {
     var rows =
         jdbc.queryForList(
             "SELECT id FROM auth_codes WHERE account_id=? AND kind=? AND code_hash=? AND"
-                + " expires_at>SYSTIMESTAMP FOR UPDATE",
+                + " expires_at>CURRENT_TIMESTAMP FOR UPDATE",
             a.id,
             kind,
             Changes.hash(code));
@@ -219,7 +219,7 @@ public class Auth {
     var rows =
         jdbc.queryForList(
             "SELECT account_id FROM refresh_tokens WHERE token_hash=? AND revoked=0 AND"
-                + " expires_at>SYSTIMESTAMP FOR UPDATE",
+                + " expires_at>CURRENT_TIMESTAMP FOR UPDATE",
             Changes.hash(r.refreshToken));
     if (rows.isEmpty())
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");

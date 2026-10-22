@@ -1,3 +1,4 @@
+import 'package:crystal_navigation_bar/crystal_navigation_bar.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,8 @@ import 'package:anajak_travel/core/network/providers.dart';
 import 'package:anajak_travel/core/network/api_client.dart';
 import 'package:anajak_travel/core/storage/travel_database.dart';
 import 'package:anajak_travel/shared/components/record_form.dart';
+import 'package:anajak_travel/features/maps/open_map_screen.dart';
+import 'support/local_tiles.dart';
 
 Future<ProviderContainer> launch(
   WidgetTester tester, {
@@ -52,6 +55,7 @@ Future<ProviderContainer> launch(
     overrides: [
       preferencesProvider.overrideWithValue(prefs),
       environmentProvider.overrideWithValue(environment),
+      mapTileFactoryProvider.overrideWithValue(LocalTiles.new),
       if (api != null) apiProvider.overrideWithValue(api),
       if (database != null) databaseProvider.overrideWithValue(database),
     ],
@@ -175,22 +179,30 @@ void main() {
     tester,
   ) async {
     await launch(tester);
-    for (final icon in [
-      Icons.work_outline_rounded,
-      Icons.explore_outlined,
-      Icons.auto_awesome_outlined,
-      Icons.person_outline_rounded,
-      Icons.home_outlined,
-    ]) {
-      await tester.tap(find.byIcon(icon).last);
+    for (final tab in [1, 2, 3, 4, 0]) {
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(CrystalNavigationBar),
+              matching: find.byType(InkWell),
+            )
+            .at(tab),
+      );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     }
-    await tester.tap(find.byIcon(Icons.explore_outlined).last);
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(CrystalNavigationBar),
+            matching: find.byType(InkWell),
+          )
+          .at(2),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Map'));
     await tester.pumpAndSettle();
-    expect(find.text('Your map, coming into focus'), findsOneWidget);
+    expect(find.text('© OpenStreetMap contributors'), findsOneWidget);
   });
   testWidgets('receipt stays draft until review and confirmation', (
     tester,

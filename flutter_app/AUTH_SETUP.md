@@ -27,7 +27,7 @@ Passwords require 12–72 UTF-16 code units and at most 72 UTF-8 bytes, matching
 
 ## Gmail delivery without a paid email service
 
-There is no sender account configured yet. Existing verified accounts can sign in. Registration, resend and recovery show unavailable until delivery is configured; registration also requires real legal URLs. Nothing falsely claims an email was sent: successful submissions say queued, because delivery is asynchronous.
+Sender configuration is private and deployment-specific. Existing verified accounts can sign in. Registration, resend and recovery show unavailable until delivery is configured; registration also requires real legal URLs. Nothing falsely claims an email was sent: successful submissions say queued, because delivery is asynchronous.
 
 1. Create or choose a Gmail sender you control. Enable Google 2-Step Verification. If eligible, generate an **app password** for this backend. Do not use your normal Gmail password and do not paste either into chat.
 2. Privately edit the backend's existing ignored `.env` at `C:\anajak_map\AnajakMapBackend\AnajakMapBackend\.env`. Preserve all existing values and add:
@@ -46,6 +46,8 @@ Set the first two to your sender/app password, the next two to your published HT
 
 3. From the backend folder run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1` to build/migrate/start. After the images are current, `-SkipBuild` is sufficient for configuration changes. Existing volumes are preserved.
 4. Register a test account you own, wait for the email (worker checks every 30 seconds), and enter its code. Check spam if needed. The worker retries at most five times while the code is valid. Mail queue acknowledgements do not guarantee inbox delivery. Run one identity-service mail worker replica with the current SMTP queue implementation; SMTP has no exactly-once delivery guarantee.
+
+To check Gmail independently of registration, run `python scripts/test-gmail.py` from the backend folder. It checks STARTTLS and authentication without sending mail or logging credentials. Add `--send-test` to send one test message to the sender's own mailbox. Confirm receipt in Inbox/Spam; SMTP acceptance alone does not establish delivery. Remove Google's display spaces when saving the app password. This check does not bypass required legal links or validate the Oracle mail queue.
 
 For a separately authorized Kubernetes deployment, the existing `scripts/kubernetes-secrets.py` includes these values in identity service/migration Secrets when supplied. No cluster was modified for this task. Use a proper secret manager for production and run the V3 migration before starting the updated identity image.
 

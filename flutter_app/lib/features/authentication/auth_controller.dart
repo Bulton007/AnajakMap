@@ -256,7 +256,7 @@ String safeAuthDestination(String? value) {
   return uri != null &&
           !uri.hasScheme &&
           !uri.hasAuthority &&
-          uri.path == '/connected' &&
+          (uri.path == '/connected' || uri.path == '/adventure') &&
           uri.fragment.isEmpty
       ? uri.toString()
       : '/connected';
@@ -264,6 +264,8 @@ String safeAuthDestination(String? value) {
 
 String? authRedirect(AuthState auth, Uri uri) {
   final path = uri.path;
+  // Device-local practice contains no account data or server rewards.
+  if (path == '/rpg' || path == '/map') return null;
   if (auth.authenticated) {
     return path == '/auth' || path == '/guest'
         ? safeAuthDestination(uri.queryParameters['from'])

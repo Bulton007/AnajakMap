@@ -117,7 +117,7 @@ public class GuideApi {
   public Object job(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
     var rows =
         jdbc.queryForList(
-            "SELECT id,trip_id,status,error_code FROM generation_jobs WHERE id=? AND owner_id=?",
+            "SELECT id,trip_id,status,error_code,TO_CHAR(next_attempt AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') retry_at FROM generation_jobs WHERE id=? AND owner_id=?",
             id,
             jwt.getSubject());
     if (rows.isEmpty()) throw Api.missing();

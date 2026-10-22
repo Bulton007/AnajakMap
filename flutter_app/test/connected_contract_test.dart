@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart';
 import 'package:anajak_travel/core/config/environment.dart';
 import 'package:anajak_travel/core/network/api_client.dart';
 import 'package:anajak_travel/core/network/travel_repository.dart';
@@ -47,6 +47,19 @@ ResponseBody response(Object? data, {int status = 200}) =>
     );
 
 void main() {
+  test('Android default reaches host; explicit USB and HTTPS URLs win', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    expect(const Environment().normalizedUrl, 'http://10.0.2.2:8080/api/v1/');
+    for (final url in [
+      'http://127.0.0.1:8080/api/v1/',
+      'https://api.example.com/api/v1/',
+    ]) {
+      expect(Environment(apiUrl: url).normalizedUrl, url);
+    }
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(const Environment().normalizedUrl, 'http://localhost:8080/api/v1/');
+  });
   test(
     'exact decimals and Oracle projections preserve money and coordinates',
     () {
@@ -176,11 +189,29 @@ void main() {
     await db.remove('server|a', 'operation');
     expect(await db.pending('server|a'), isEmpty);
   });
-  test('offline sign-out clears device credentials even if revocation fails',()async{
-    final dio=Dio();dio.httpClientAdapter=Transport((r)async=>throw DioException(requestOptions:r,type:DioExceptionType.connectionError));
-    final store=MemoryCredentials();final api=ApiClient('https://example.test/api/v1/',store,transport:dio);
-    await api.acceptTokens({'accessToken':'access','refreshToken':'refresh'});
-    await expectLater(api.logout(),throwsA(isA<ApiFailure>()));
-    expect(api.authenticated,false);expect(store.value,isNull);
-  });
+  test(
+    'offline sign-out clears device credentials even if revocation fails',
+    () async {
+      final dio = Dio();
+      dio.httpClientAdapter = Transport(
+        (r) async => throw DioException(
+          requestOptions: r,
+          type: DioExceptionType.connectionError,
+        ),
+      );
+      final store = MemoryCredentials();
+      final api = ApiClient(
+        'https://example.test/api/v1/',
+        store,
+        transport: dio,
+      );
+      await api.acceptTokens({
+        'accessToken': 'access',
+        'refreshToken': 'refresh',
+      });
+      await expectLater(api.logout(), throwsA(isA<ApiFailure>()));
+      expect(api.authenticated, false);
+      expect(store.value, isNull);
+    },
+  );
 }

@@ -35,5 +35,6 @@ $oracleId=& docker @compose ps -q oracle
 Invoke-Docker -Arguments @('cp','scripts/grant-runtime.sh',"${oracleId}:/tmp/anajak-grant-runtime.sh")
 Invoke-Docker ($compose+@('exec','-T','oracle','bash','/tmp/anajak-grant-runtime.sh'))
 Invoke-Docker ($compose+@('-f','compose.runtime.yml','up','-d'))
-Write-Host 'Gateway: http://127.0.0.1:8080. Wait for /actuator/health/readiness before using Flutter.'
+$gatewayPort=if($env:GATEWAY_HTTP_PORT){$env:GATEWAY_HTTP_PORT}else{'8080'}
+Write-Host "Gateway: http://127.0.0.1:$gatewayPort. Wait for /actuator/health/readiness before using Flutter."
 

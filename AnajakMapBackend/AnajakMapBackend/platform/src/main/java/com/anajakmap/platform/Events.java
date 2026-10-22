@@ -49,7 +49,7 @@ public class Events {
     var rows =
         jdbc.queryForList(
             "SELECT id,event_type,payload,trace_id,attempts FROM event_outbox WHERE published_at IS"
-                + " NULL AND dead=0 AND next_attempt<=SYSTIMESTAMP ORDER BY created_at FETCH FIRST"
+                + " NULL AND dead=0 AND next_attempt<=CURRENT_TIMESTAMP ORDER BY created_at FETCH FIRST"
                 + " 25 ROWS ONLY");
     for (var row : rows) {
       String id = row.get("ID").toString();
@@ -71,12 +71,12 @@ public class Events {
         var confirm = c.getFuture().get(5, TimeUnit.SECONDS);
         if (!confirm.isAck() || c.getReturned() != null)
           throw new IllegalStateException("Not confirmed/routed");
-        jdbc.update("UPDATE event_outbox SET published_at=SYSTIMESTAMP WHERE id=?", id);
+        jdbc.update("UPDATE event_outbox SET published_at=CURRENT_TIMESTAMP WHERE id=?", id);
       } catch (Exception e) {
         int n = ((Number) row.get("ATTEMPTS")).intValue() + 1;
         jdbc.update(
             "UPDATE event_outbox SET"
-                + " attempts=?,dead=?,next_attempt=SYSTIMESTAMP+NUMTODSINTERVAL(?,'SECOND') WHERE"
+                + " attempts=?,dead=?,next_attempt=CURRENT_TIMESTAMP+NUMTODSINTERVAL(?,'SECOND') WHERE"
                 + " id=?",
             n,
             n >= 8 ? 1 : 0,

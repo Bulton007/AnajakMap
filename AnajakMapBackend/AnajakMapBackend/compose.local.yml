@@ -1,14 +1,28 @@
 services:
   identity-service:
+    # Local developer accounts use published review drafts, not production terms.
+    environment:
+      AUTH_TERMS_URL: ${AUTH_TERMS_URL:-https://anajakmap-legal.vercel.app/terms.html}
+      AUTH_PRIVACY_URL: ${AUTH_PRIVACY_URL:-https://anajakmap-legal.vercel.app/privacy.html}
+      AUTH_POLICY_VERSION: ${AUTH_POLICY_VERSION:-local-test-draft-2026-10-12}
     build:
       dockerfile: Dockerfile.local
   trip-service:
     build:
       dockerfile: Dockerfile.local
   ai-guide-service:
+    dns: ["${EXTERNAL_DNS:-1.1.1.1}", "${EXTERNAL_DNS_FALLBACK:-8.8.8.8}"]
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER:-fixture}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
     build:
       dockerfile: Dockerfile.local
   discovery-service:
+    dns: ["${EXTERNAL_DNS:-1.1.1.1}"]
+    environment:
+      RPG_SIMULATION_ENABLED: "true"
+      PHOTON_BASE_URL: ${PHOTON_BASE_URL:-https://photon.komoot.io}
     build:
       dockerfile: Dockerfile.local
   expense-service:

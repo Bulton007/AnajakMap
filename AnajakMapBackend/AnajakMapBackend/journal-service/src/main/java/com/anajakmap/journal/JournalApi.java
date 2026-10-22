@@ -90,7 +90,7 @@ public class JournalApi {
         s -> {
           if (jdbc.update(
                   "UPDATE journal_entries SET"
-                      + " title=?,content=?,recap=?,version=version+1,updated_at=SYSTIMESTAMP WHERE"
+                      + " title=?,content=?,recap=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE"
                       + " id=? AND owner_id=? AND version=?",
                   r.title,
                   r.content,
@@ -232,7 +232,7 @@ public class JournalApi {
     return tx.execute(
         s -> {
           if (jdbc.update(
-                  "UPDATE journal_entries SET recap=?,version=version+1,updated_at=SYSTIMESTAMP"
+                  "UPDATE journal_entries SET recap=?,version=version+1,updated_at=CURRENT_TIMESTAMP"
                       + " WHERE id=? AND version=?",
                   recap,
                   id,

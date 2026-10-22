@@ -18,6 +18,8 @@ public class DiscoveryApi {
   private final StringRedisTemplate redis;
   private final Changes json;
   private final RateLimit limit;
+  private final PhotonPlaces photon;
+  private final PlacePhotos photos;
 
   public DiscoveryApi(
       Environment e,
@@ -25,7 +27,9 @@ public class DiscoveryApi {
       @Value("${anajak.provider-key}") String k,
       StringRedisTemplate r,
       Changes c,
-      RateLimit l) {
+      RateLimit l, PhotonPlaces photon, PlacePhotos photos) {
+    this.photon = photon;
+    this.photos = photos;
     dev =
         Arrays.asList(e.getActiveProfiles()).stream()
             .anyMatch(x -> x.equals("dev") || x.equals("test"));
@@ -38,6 +42,14 @@ public class DiscoveryApi {
       throw new IllegalStateException("Discovery provider URL/key required outside dev/test");
   }
 
+  @GetMapping("/photos")
+  public Object photos(@AuthenticationPrincipal Jwt jwt, @RequestParam String query,
+      @RequestParam(defaultValue="0") int page) {
+    if(query.isBlank()||query.length()>200||page<0)throw new IllegalArgumentException();
+    limit.check("photos:"+jwt.getSubject(),20,60);
+    return photon.enabled()?photos.photos(photon.search(query,page,20)):Map.of();
+  }
+
   @GetMapping("/places")
   public Object places(
       @AuthenticationPrincipal Jwt jwt,
@@ -47,11 +59,12 @@ public class DiscoveryApi {
     if (query.isBlank() || query.length() > 200 || page < 0 || size < 1 || size > 100)
       throw new IllegalArgumentException();
     limit.check("discovery:" + jwt.getSubject(), 60, 60);
+    if (photon.enabled()) return photon.search(query, page, size);
     if (dev)
-      return List.of(
+      return page > 0 ? List.of() : List.of(
           place("Royal Palace", 11.5638, 104.9315),
           place("National Museum", 11.5658, 104.9288),
-          place("Wat Phnom", 11.5760, 104.9231));
+          place("Wat Phnom", 11.5760, 104.9231)).stream().filter(p -> query.toLowerCase(Locale.ROOT).contains("phnom penh") || p.get("name").toString().toLowerCase(Locale.ROOT).contains(query.strip().toLowerCase(Locale.ROOT))).limit(size).toList();
     return call("places", Map.of("query", query, "page", page, "size", size), false);
   }
 

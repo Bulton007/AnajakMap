@@ -1,0 +1,6 @@
+# Copy to key.properties locally. Never commit keys or passwords.
+# Relative storeFile paths are resolved against android/.
+storeFile=/absolute/path/to/anajak-upload.jks
+storePassword=
+keyAlias=upload
+keyPassword=

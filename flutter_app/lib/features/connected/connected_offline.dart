@@ -6,6 +6,8 @@ import '../../core/network/providers.dart';
 import '../../shared/components/components.dart';
 import '../../shared/components/remote.dart';
 import '../../shared/models/server_models.dart';
+import '../../shared/components/travel_panels.dart';
+import 'offline_trip_cards.dart';
 
 class ConnectedOffline extends ConsumerStatefulWidget {
   const ConnectedOffline({super.key, required this.profile, this.trip});
@@ -230,6 +232,11 @@ class _OfflineState extends ConsumerState<ConnectedOffline> {
       load: load,
       builder: (data, _) => PageBody(
         children: [
+          TravelHero(
+            title: context.t('offlineJourney'),
+            subtitle: context.t('offlineReady'),
+            icon: Icons.offline_pin_outlined,
+          ),
           Notice(context.t('offlineCacheNotice')),
           const SizedBox(height: 16),
           if (widget.trip != null)
@@ -240,49 +247,26 @@ class _OfflineState extends ConsumerState<ConnectedOffline> {
             ),
           Section(context.t('savedTrips')),
           for (final item in objects(data['snapshots']))
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    title: Text(
-                      string(object(object(item['data'])['trip']), 'title'),
-                    ),
-                    subtitle: Text(
-                      '${context.t('savedAt')}: ${item['savedAt']}',
-                    ),
-                    onTap: () => openScreen(
-                      context,
-                      Scaffold(
-                        appBar: AppBar(title: Text(context.t('offline'))),
-                        body: PageBody(
-                          children: [
-                            Notice(context.t('cachedRead')),
-                            ServerResult(item['data']),
-                          ],
-                        ),
-                      ),
-                    ),
+            DownloadedTripCard(
+              snapshot: item,
+              onOpen: () => openScreen(
+                context,
+                Scaffold(
+                  appBar: AppBar(title: Text(context.t('offline'))),
+                  body: PageBody(
+                    children: [OfflineSnapshotView(data: object(item['data']))],
                   ),
-                  TextButton(
-                    onPressed: () => edit(item),
-                    child: Text(context.t('queueEdit')),
-                  ),
-                  Wrap(
-                    children: [
-                      TextButton(
-                        onPressed: () => queueRecord(item, 'expense'),
-                        child: Text(context.t('addExpense')),
-                      ),
-                      TextButton(
-                        onPressed: () => queueRecord(item, 'journal'),
-                        child: Text(context.t('newEntry')),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
+              onEdit: () => edit(item),
+              onExpense: () => queueRecord(item, 'expense'),
+              onJournal: () => queueRecord(item, 'journal'),
             ),
-          if (objects(data['snapshots']).isEmpty) Text(context.t('empty')),
+          if (objects(data['snapshots']).isEmpty)
+            VisualEmpty(
+              icon: Icons.download_for_offline_outlined,
+              title: context.t('empty'),
+            ),
           Section(context.t('pendingOperations')),
           for (final op in objects(data['operations']))
             Card(
@@ -291,16 +275,16 @@ class _OfflineState extends ConsumerState<ConnectedOffline> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${op['kind']} · ${op['state']}'),
+                    PendingChangePreview(operation: op),
                     if (op['error'] != null)
                       Notice(op['error'].toString(), error: true),
-                    ServerResult(op['body']),
                     Wrap(
                       spacing: 12,
                       children: [
-                        FilledButton(
+                        FilledButton.icon(
                           onPressed: syncing ? null : () => sync(op),
-                          child: Text(context.t('retry')),
+                          icon: const Icon(Icons.sync),
+                          label: Text(context.t('retry')),
                         ),
                         TextButton(
                           onPressed: syncing
@@ -327,7 +311,11 @@ class _OfflineState extends ConsumerState<ConnectedOffline> {
                 ),
               ),
             ),
-          if (objects(data['operations']).isEmpty) Text(context.t('noPending')),
+          if (objects(data['operations']).isEmpty)
+            VisualEmpty(
+              icon: Icons.cloud_done_outlined,
+              title: context.t('noPending'),
+            ),
         ],
       ),
     ),
