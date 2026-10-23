@@ -7,10 +7,18 @@ does not deploy to OpenShift or migrate the live local data to Neon.
 ## Start
 
 Double-click `C:\anajak_map\Start Backend.cmd`. It starts Docker Desktop if
-needed, waits for the engine, starts the backend/Nginx/public test tunnel,
+needed, waits for the engine, initializes/builds a fresh PC when required,
+starts the backend/Nginx/public test tunnel,
 prints the current public URL, updates Flutter's local config, and verifies the
 proxy. The window stays open so errors and the URL remain visible. Closing that
 window after successful startup does not stop the Docker containers.
+
+PowerShell 7 (`pwsh`) is not required. Windows' built-in `powershell.exe` works;
+first-run keys are generated securely inside the same JDK container used by the
+backend build. Install Docker Desktop (Linux engine/WSL 2) and Git, clone the
+repository, then double-click the launcher. Initial downloads/builds take longer.
+Existing `.env` files are never overwritten. If a database volume exists without
+its `.env`, initialization stops and asks for the original credentials.
 
 Docker Desktop must be running. From the backend root:
 

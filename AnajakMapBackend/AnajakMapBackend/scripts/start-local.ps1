@@ -5,8 +5,8 @@ function Invoke-Docker([string[]]$Arguments) {
     & docker @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Docker command failed (exit $LASTEXITCODE). Check the preceding output." }
 }
-if (-not (Test-Path -LiteralPath '.env')) { & "$PSScriptRoot/init-dev.ps1" }
 Invoke-Docker -Arguments @('info','--format','{{.ServerVersion}}')
+if (-not (Test-Path -LiteralPath '.env')) { & "$PSScriptRoot/init-dev.ps1" }
 $compose=@('compose','-f','compose.yml')
 if($OfficialOracle){$compose+=@('-f','compose.oracle-official.yml')}
 $compose+=@('-f','compose.media-source.yml','-f','compose.local.yml')

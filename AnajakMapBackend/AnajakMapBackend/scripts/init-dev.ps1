@@ -1,30 +1,18 @@
-$ErrorActionPreference='Stop'
+$ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
-if(Test-Path -LiteralPath '.env'){throw '.env already exists; refusing to overwrite.'}
-function Random-Hex([int]$count=24) {
-    $bytes=[byte[]]::new($count)
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    return [Convert]::ToHexString($bytes)
-}
-$rsa=[System.Security.Cryptography.RSA]::Create(3072)
+if (Test-Path -LiteralPath '.env') { throw '.env already exists; refusing to overwrite.' }
+$projectName = if ($env:COMPOSE_PROJECT_NAME) { $env:COMPOSE_PROJECT_NAME } else { 'anajakmap' }
+$existingData = $false
 try {
-    $values=[ordered]@{
-        ORACLE_PASSWORD=(Random-Hex)
-        REDIS_PASSWORD=(Random-Hex)
-        RABBIT_USER='anajak'
-        RABBIT_PASSWORD=(Random-Hex)
-        OBJECT_ACCESS_KEY='anajak-local'
-        OBJECT_SECRET_KEY=(Random-Hex)
-        SERVICE_TOKEN=(Random-Hex 32)
-        DATA_ENCRYPTION_KEY=[Convert]::ToBase64String([Convert]::FromHexString((Random-Hex 32)))
-        JWT_PUBLIC_KEY=[Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo())
-        JWT_PRIVATE_KEY=[Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
-    }
-    foreach($service in @('IDENTITY','TRIP','AI_GUIDE','DISCOVERY','EXPENSE','RESERVATION','JOURNAL','NOTIFICATION','GATEWAY')) {
-        $values["${service}_DB_PASSWORD"]=Random-Hex
-        $values["${service}_APP_PASSWORD"]=Random-Hex
-    }
-    $lines=$values.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
-    [IO.File]::WriteAllLines((Join-Path (Get-Location) '.env'),$lines)
-    Write-Host 'Created local development credentials in ignored .env. Existing databases require their original credentials.'
-} finally {$rsa.Dispose()}
+    & docker volume inspect "${projectName}_oracle-data" *> $null
+    $existingData = ($LASTEXITCODE -eq 0)
+} catch { }
+if ($existingData) {
+    throw 'An Oracle data volume already exists but .env is missing. Restore its original .env before starting; new credentials cannot unlock existing data.'
+}
+# The existing JDK build container supports Windows PowerShell 5.1 too.
+# Credentials stay inside the ignored output file, never in tool output.
+$source = (Get-Location).Path
+& docker run --rm --network none --mount "type=bind,source=$source,target=/workspace" `
+    -w /workspace maven:3.9.11-eclipse-temurin-21 java scripts/InitDev.java
+if ($LASTEXITCODE -ne 0) { throw 'Credential initialization failed. Check that Docker Desktop is running.' }

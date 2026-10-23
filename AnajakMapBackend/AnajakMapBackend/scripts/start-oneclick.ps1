@@ -35,6 +35,19 @@ try {
         }
     }
 
+    $backendPath = Split-Path $PSScriptRoot -Parent
+    $needsSetup = !(Test-Path -LiteralPath (Join-Path $backendPath '.env'))
+    if (!$needsSetup) {
+        try {
+            & docker image inspect anajakmap-gateway-service:latest *> $null
+            $needsSetup = ($LASTEXITCODE -ne 0)
+        } catch { $needsSetup = $true }
+    }
+    if ($needsSetup) {
+        Write-Host 'First-time setup: generating missing local credentials, building images and initializing the database.'
+        Write-Host 'The first run can take a while. Existing .env credentials will be preserved.'
+        & (Join-Path $PSScriptRoot 'start-local.ps1')
+    }
     & (Join-Path $PSScriptRoot 'start-laptop.ps1') -TemporaryPublicUrl
     & (Join-Path $PSScriptRoot 'test-laptop.ps1')
     Write-Host ''
