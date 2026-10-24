@@ -19,11 +19,15 @@ AnajakMapBackend/AnajakMapBackend/expense-service/src/main/java/com/anajakmap/ex
 AnajakMapBackend/AnajakMapBackend/expense-service/src/test/java/com/anajakmap/expense/CurrencyApiTest.java
 AnajakMapBackend/AnajakMapBackend/scripts/configure-gmail.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/test-laptop.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/test-laptop-tunnel.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/start-laptop.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/update-ai.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/update-app-backend.ps1
 Update App Backend.cmd
 APP_UPDATE_SETUP.md
 APP_AUDIT.md
 AnajakMapBackend/AnajakMapBackend/scripts/backend-update-install.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/backend-readiness.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/test-backend-readiness.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/test-update-installer.ps1
 backend-update-files.txt

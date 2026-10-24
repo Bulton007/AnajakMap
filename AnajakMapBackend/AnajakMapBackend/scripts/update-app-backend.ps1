@@ -1,5 +1,5 @@
 # Run after extracting the source update into the EXISTING hosting-PC checkout.
-param([switch]$CheckOnly, [string]$HostingRoot)
+param([switch]$CheckOnly, [string]$HostingRoot, [switch]$SkipBuild)
 $ErrorActionPreference = 'Stop'
 try {
     $backendFolder = Split-Path $PSScriptRoot -Parent
@@ -45,6 +45,7 @@ try {
         $manifestEntries = [IO.File]::ReadAllLines($sourceManifest)
         foreach ($required in @('Update App Backend.cmd', 'backend-update-files.txt',
             'AnajakMapBackend/AnajakMapBackend/scripts/update-app-backend.ps1',
+            'AnajakMapBackend/AnajakMapBackend/scripts/backend-readiness.ps1',
             'AnajakMapBackend/AnajakMapBackend/scripts/backend-update-install.ps1')) {
             if ($manifestEntries -notcontains $required) { throw 'The patch manifest is incomplete. No source files or services were changed.' }
         }
@@ -56,7 +57,9 @@ try {
         Write-Host "Applied $($overlay.FileCount) update files to $($overlay.TargetRoot). Existing .env was retained."
         Write-Host "Original source backup: $($overlay.BackupPath)"
         $updatedScript = Join-Path $overlay.TargetRoot 'AnajakMapBackend/AnajakMapBackend/scripts/update-app-backend.ps1'
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updatedScript
+        $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $updatedScript)
+        if ($SkipBuild) { $childArgs += '-SkipBuild' }
+        & powershell.exe @childArgs
         exit $LASTEXITCODE
     }
     if ($CheckOnly) {
@@ -68,29 +71,31 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Open Docker Desktop and wait for its Linux engine.' }
     $compose = @('compose', '-f', 'compose.yml', '-f', 'compose.media-source.yml',
         '-f', 'compose.local.yml', '-f', 'compose.runtime.yml', '-f', 'compose.laptop.yml')
+    $existingTunnel = @(& docker ps -aq --filter 'label=com.docker.compose.project=anajakmap' --filter 'label=com.docker.compose.service=laptop-tunnel' 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $existingTunnel.Count -gt 0) {
+        $compose += @('-f', 'compose.laptop-tunnel.yml')
+    }
     & docker @compose config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Compose configuration is invalid. No running service was replaced.' }
-    $source = (Get-Location).Path
-    & docker run --rm --mount "type=bind,source=$source,target=/workspace" `
-        --mount type=volume,source=anajak-maven-cache,target=/root/.m2 -w /workspace `
-        maven:3.9.11-eclipse-temurin-21 mvn -B -ntp -pl ai-guide-service,discovery-service,expense-service -am package -DskipTests
-    if ($LASTEXITCODE -ne 0) { throw 'Package build failed. Existing running services were not replaced.' }
     $services = @('ai-guide-service', 'discovery-service', 'expense-service')
-    & docker @compose build @services
-    if ($LASTEXITCODE -ne 0) { throw 'Image build failed. Existing running services were not replaced.' }
-    & docker @compose up -d --no-deps --no-build @services
+    if (!$SkipBuild) {
+        $source = (Get-Location).Path
+        & docker run --rm --mount "type=bind,source=$source,target=/workspace" `
+            --mount type=volume,source=anajak-maven-cache,target=/root/.m2 -w /workspace `
+            maven:3.9.11-eclipse-temurin-21 mvn -B -ntp -pl ai-guide-service,discovery-service,expense-service -am package -DskipTests
+        if ($LASTEXITCODE -ne 0) { throw 'Package build failed. Existing running services were not replaced.' }
+        & docker @compose build @services
+        if ($LASTEXITCODE -ne 0) { throw 'Image build failed. Existing running services were not replaced.' }
+    } else { Write-Host 'Using existing service images (-SkipBuild). No Maven/image build will run.' }
+    & docker @compose up -d --no-build @services
     if ($LASTEXITCODE -ne 0) { throw 'Service restart failed. Check Docker logs locally.' }
+    . (Join-Path $PSScriptRoot 'backend-readiness.ps1')
+    $ports = @{'ai-guide-service'=8083; 'discovery-service'=8084; 'expense-service'=8085}
     foreach ($service in $services) {
         $id = & docker @compose ps -q $service
-        $ready = $false
-        for ($attempt = 0; $attempt -lt 45; $attempt++) {
-            $health = & docker inspect --format '{{.State.Health.Status}}' $id 2>$null
-            if ($health -eq 'healthy') { $ready = $true; break }
-            if ($health -eq 'unhealthy') { break }
-            Start-Sleep -Seconds 2
-        }
-        if (!$ready) { throw "$service did not become healthy. Check its local Docker logs before testing the app." }
-        Write-Host "$service is healthy."
+        if ($LASTEXITCODE -ne 0) { throw "Could not find $service after starting it." }
+        Wait-BackendServiceReady -ContainerId ($id -join '').Trim() -Service $service -Port $ports[$service]
+        Write-Host "$service readiness is UP."
     }
     Write-Host 'Backend update complete. Existing Gmail settings, database volumes and tunnel were retained.'
     Write-Host 'Photo recognition remains disabled unless GEMINI_VISION_ENABLED=true is explicitly configured after model verification.'

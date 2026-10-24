@@ -134,3 +134,26 @@ remain outstanding; this testing update is not a claim that every feature is rea
 - Windows PowerShell 5.1: 23 regression checks passed. Simulated full installation
   verified overlay copying, backup creation, child updater execution and unchanged
   `.env`; no real backend was restarted during these tests.
+
+## Runtime readiness recovery — 24 October
+
+- Replaced the invalid Docker `State.Health.Status` lookup with per-container
+  Actuator readiness checks; local Spring images have no Docker healthcheck.
+  Added bounded startup retries and an existing-image `-SkipBuild` recovery path.
+- The updater now starts stopped dependencies and includes an existing tunnel
+  overlay without removing/restarting the tunnel container.
+- Windows PowerShell 5.1: 20 readiness tests and 23 source-installer tests passed;
+  the full isolated updater/skip-build check also passed.
+- Live recovery on this workspace PC resumed Oracle/Redis/RabbitMQ/media and all
+  backend services. AI guide, discovery and expense returned readiness UP.
+  Local and current public tunnel checks passed: auth config 200, unauthenticated
+  profile 401, internal/Actuator/Swagger paths blocked with 404. Registration and
+  email delivery are configured; no inbox delivery or Gemini generation was tested.
+- Fixed temporary URL extraction to read only the current container session's
+  logs and select the latest URL, avoiding stale URLs after a tunnel restart.
+  `flutter_app/config/connected.public.local.json` was refreshed locally and stays
+  ignored. Existing installed builds need rebuilding when their tunnel URL changes.
+- Three additional isolated tunnel-startup regressions passed: retained logs are
+  excluded, the latest current-session URL wins, and missing URL logs leave the
+  existing Flutter configuration untouched. No Samsung device was connected for
+  physical-device testing during this runtime recovery.

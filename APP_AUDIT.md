@@ -200,9 +200,27 @@ remaining dependencies. No percentage-complete claim is used.
 - `.local/anajak-backend-update-1.0.2.zip` contains only allowlisted backend
   source, scripts and documentation; archive contents were inspected to exclude
   `.env`, local release config and signing material. See `APP_UPDATE_SETUP.md`.
-  No Play upload, remote-PC update, Git push or iOS build was performed.
+  No Play upload or iOS build was performed. Later hosting recovery is recorded
+  below; updates to any other PC still require applying the Git/source update.
 
-## Highest-priority next task
+## Hosting follow-up checks
+
+Readiness follow-up: local application images do not declare Docker HEALTHCHECK,
+so the old `.State.Health.Status` template was invalid. Added
+`scripts/{backend-readiness,test-backend-readiness}.ps1`; the updater requires
+Actuator HTTP success and JSON `UP` for all three service ports, tolerates startup
+retries, and starts stopped dependencies. `-SkipBuild` finishes an already-built
+update without repeating compilation. Existing tunnel overlay is retained.
+Windows PowerShell 5.1: 20 readiness tests and 23 installer tests passed, plus
+the isolated complete overlay/child-run/skip-build check. Live recovery succeeded:
+AI guide, discovery and expense each reported readiness UP after dependencies
+were resumed. No Google generation requests or emails were sent by these checks.
+The full stack and public tunnel were subsequently resumed. Local and public
+proxy checks passed (auth config 200, unauthenticated profile 401, blocked internal
+paths 404). Fixed stale tunnel URL extraction to use only the current session and
+its latest URL; three isolated startup regression cases passed. Flutter's ignored
+`connected.public.local.json` now points at the current tunnel. Samsung was not
+connected during this recovery, so physical-device acceptance remains outstanding.
 
 Hosting updater follow-up: an extracted patch without `.env` now discovers the
 single initialized checkout through ancestry and Docker labels, validates the
@@ -215,8 +233,10 @@ full dry-run/apply/child-run check with simulated Docker. Original `.env` hashes
 were preserved, and no real services were changed by these checks. Added
 `scripts/{backend-update-install,test-update-installer}.ps1` and the root manifest.
 
-Apply the source update on the actual hosting PC and run a Samsung end-to-end
-acceptance pass against that backend, beginning with login and AI chat. Configure
+## Highest-priority next task
+
+Run a Samsung end-to-end acceptance pass against the restored backend using the
+current `connected.public.local.json`, beginning with login and AI chat. Configure
 the optional real router and confirm image model support before enabling those
 features. Stable hosting, destination-specific culture data, native push, iOS,
 privacy/retention and operations checks remain production dependencies.

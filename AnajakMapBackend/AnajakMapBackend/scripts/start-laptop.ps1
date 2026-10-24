@@ -32,16 +32,18 @@ if ($TemporaryPublicUrl) {
     $publicCompose = $compose + @('-f', 'compose.laptop-tunnel.yml')
     Invoke-Docker ($publicCompose + @('up', '-d', '--no-build', 'laptop-tunnel'))
     $tunnelId = & docker @publicCompose ps -q laptop-tunnel
+    $tunnelStartedAt = & docker inspect --format '{{.State.StartedAt}}' $tunnelId
+    if ($LASTEXITCODE -ne 0 -or !$tunnelStartedAt) { throw 'Could not determine the current tunnel session.' }
     $publicUrl = $null
     for ($attempt = 0; $attempt -lt 10; $attempt++) {
         # Windows PowerShell treats native stderr log lines as ErrorRecords.
         $previousPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
-            $tunnelLines = & docker logs $tunnelId 2>&1
+            $tunnelLines = & docker logs --since ($tunnelStartedAt -join '').Trim() --tail 200 $tunnelId 2>&1
         } finally { $ErrorActionPreference = $previousPreference }
-        $match = [regex]::Match(($tunnelLines -join "`n"), 'https://[a-z0-9-]+\.trycloudflare\.com')
-        if ($match.Success) { $publicUrl = $match.Value; break }
+        $urlMatches = [regex]::Matches(($tunnelLines -join "`n"), 'https://[a-z0-9-]+\.trycloudflare\.com')
+        if ($urlMatches.Count -gt 0) { $publicUrl = $urlMatches[$urlMatches.Count - 1].Value; break }
         Start-Sleep -Seconds 2
     }
     if (!$publicUrl) { throw 'Tunnel address is not available yet. Inspect laptop-tunnel logs.' }

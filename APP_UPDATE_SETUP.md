@@ -9,8 +9,9 @@ there automatically. Keep the existing initialized backend folder and its `.env`
    extracted patch's updater: it can discover one initialized checkout from its
    parent folders or Docker labels and install the listed source files there.
 3. Open Docker Desktop. Double-click `Update App Backend.cmd` in the checkout root.
-   This builds/restarts only AI, discovery and expense services. It does not
-   replace `.env`, Gmail credentials, data volumes or the tunnel.
+   This builds/restarts AI, discovery and expense services and starts their
+   required dependencies if stopped. It preserves `.env`, Gmail credentials,
+   data volumes and the existing tunnel container.
 4. Check registration/email and login, then test weather, AI and maps from the
    updated Android internal-test build. If the tunnel hostname changed, rebuild
    Flutter with the current HTTPS `API_BASE_URL` in your ignored release config.
@@ -62,6 +63,40 @@ git pull --ff-only origin main
 
 Resolve any Git-reported local source changes before retrying; do not force-reset
 the hosting checkout or replace its private settings.
+
+### If images built but the old updater failed on `State.Health.Status`
+
+Spring Boot's local images have no Docker `HEALTHCHECK` field. The corrected
+updater probes each container's actual Actuator readiness endpoint (ports 8083,
+8084 and 8085), requires HTTP success and JSON `status: UP`, and retries startup.
+It also starts stopped Oracle/Redis/RabbitMQ/media dependencies. It does not
+treat a running container or an absent health field as proof of readiness.
+
+After pulling the fix, reuse the images that already built:
+
+```powershell
+cd C:\anajak_map
+git pull --ff-only origin main
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\AnajakMapBackend\AnajakMapBackend\scripts\update-app-backend.ps1 -SkipBuild
+```
+
+`-SkipBuild` skips compilation/image building and still starts dependencies and
+verifies all three application endpoints. It assumes those images already exist.
+The updater includes an existing tunnel in the Compose model to prevent a false
+orphan warning. Do not remove the tunnel container to silence an orphan warning.
+If the gateway/proxy was also stopped, run `Start Backend.cmd` to resume the full
+hosting stack. A restarted temporary tunnel may receive a different public URL.
+
+The startup script now reads only the current tunnel session's logs when updating
+`flutter_app/config/connected.public.local.json`. Use that file for local Flutter
+testing against the current public backend:
+
+```powershell
+cd C:\anajak_map\flutter_app
+flutter run --dart-define-from-file=config/connected.public.local.json
+```
+
+This refreshes development configuration, not an already installed Play build.
 
 ## Optional configuration (backend `.env`, never Flutter)
 
