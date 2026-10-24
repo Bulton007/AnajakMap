@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/expenses/currency")
 public class CurrencyApi {
-  private final boolean dev;
+  private final BigDecimal khrPerUsd;
   private final String url, key;
 
   public CurrencyApi(
@@ -20,11 +20,9 @@ public class CurrencyApi {
       @Value("${CURRENCY_PROVIDER_KEY:}") String k) {
     url = u;
     key = k;
-    dev =
-        Arrays.asList(e.getActiveProfiles()).stream()
-            .anyMatch(p -> p.equals("dev") || p.equals("test"));
-    if (!dev && (u.isBlank() || k.isBlank()))
-      throw new IllegalStateException("Currency provider URL/key required outside dev/test");
+    khrPerUsd = new BigDecimal(e.getProperty("APP_KHR_PER_USD", "4000"));
+    if (khrPerUsd.signum() <= 0 || khrPerUsd.precision() > 9)
+      throw new IllegalArgumentException("Invalid application exchange rate");
   }
 
   @GetMapping
@@ -34,29 +32,27 @@ public class CurrencyApi {
     Currency.getInstance(to);
     if (amount.signum() < 0 || amount.precision() > 14 || amount.scale() > 2)
       throw new IllegalArgumentException();
-    if (dev) {
-      Map<String, BigDecimal> rates =
-          Map.of(
-              "USD", BigDecimal.ONE, "KHR", new BigDecimal("4100"), "EUR", new BigDecimal("0.90"));
-      if (!rates.containsKey(from) || !rates.containsKey(to))
-        throw new IllegalArgumentException("Dev supports USD/KHR/EUR");
-      BigDecimal rate = rates.get(to).divide(rates.get(from), 10, RoundingMode.HALF_EVEN);
+    if (from.equals(to) || Set.of("USD","KHR").containsAll(List.of(from,to))) {
+      BigDecimal rate = from.equals(to) ? BigDecimal.ONE : to.equals("KHR")
+          ? khrPerUsd : BigDecimal.ONE.divide(khrPerUsd, 12, RoundingMode.HALF_UP);
+      BigDecimal converted = from.equals(to) ? amount : to.equals("KHR")
+          ? amount.multiply(khrPerUsd) : amount.divide(khrPerUsd, 12, RoundingMode.HALF_UP);
       return Map.of(
           "amount",
-          amount.multiply(rate).setScale(2, RoundingMode.HALF_EVEN),
+          converted.setScale(to.equals("KHR") ? 0 : 2, RoundingMode.HALF_UP),
           "rate",
           rate,
           "currency",
           to,
           "source",
-          "development fixture",
+          "Fixed application rate; not a live market rate",
           "updatedAt",
           Instant.now(),
-          "estimate",
-          true,
-          "mock",
-          true);
+          "estimate", true, "mock", false,
+          "rateType", "fixed", "appRateKhrPerUsd", khrPerUsd);
     }
+    if (url.isBlank() || key.isBlank()) throw new org.springframework.web.server.ResponseStatusException(
+        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "A live provider is required for this currency pair");
     Map result =
         HttpClients.client(url)
             .post()

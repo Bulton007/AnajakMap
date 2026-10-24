@@ -4,7 +4,9 @@ import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
 import '../models/server_models.dart';
 import 'components.dart';
+import 'travel_success.dart';
 import '../formatting/travel_dates.dart';
+import '../formatting/travel_money.dart';
 
 class RemoteContent<T> extends StatefulWidget {
   const RemoteContent({super.key, required this.load, required this.builder});
@@ -95,19 +97,37 @@ Future<Object?> remoteForm(
   String? notice,
   String submitLabel = 'save',
   Future<Object?> Function(Json, String)? submit,
-}) => showModalBottomSheet<Object?>(
-  context: context,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
-  builder: (_) => _RemoteForm(
-    title: title,
-    fields: fields,
-    notice: notice,
-    submitLabel: submitLabel,
-    submit: submit,
-  ),
-);
+}) async {
+  final result = await showModalBottomSheet<Object?>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (_) => _RemoteForm(
+      title: title,
+      fields: fields,
+      notice: notice,
+      submitLabel: submitLabel,
+      submit: submit,
+    ),
+  );
+  if (result != null &&
+      context.mounted &&
+      submit != null &&
+      {
+        'createTrip',
+        'save',
+        'saveTranslation',
+        'addExpense',
+        'newEntry',
+        'preferences',
+        'addReservation',
+        'addEvent',
+      }.contains(title)) {
+    showTravelSuccess(context);
+  }
+  return result;
+}
 
 class _RemoteForm extends StatefulWidget {
   const _RemoteForm({
@@ -407,7 +427,15 @@ class ServerResult extends StatelessWidget {
         children: [
           for (final e in (data as Map).entries)
             if (e.value != null &&
-                !['accessToken', 'refreshToken', 'objectKey'].contains(e.key))
+                ![
+                  'accessToken',
+                  'refreshToken',
+                  'objectKey',
+                  'id',
+                  'ownerId',
+                  'tripId',
+                  'conversationId',
+                ].contains(label(e.key.toString())))
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: e.value is Map || e.value is List
@@ -423,7 +451,9 @@ class ServerResult extends StatelessWidget {
                         ],
                       )
                     : SelectableText(
-                        '${context.t(label(e.key.toString()))}: ${['startsAt', 'endsAt', 'createdAt', 'updatedAt', 'completedAt'].contains(label(e.key.toString())) && e.value is String
+                        '${context.t(label(e.key.toString()))}: ${['amount', 'balance', 'total', 'spent'].contains(label(e.key.toString())) && string(object(data), 'currency').isNotEmpty
+                            ? travelMoney(e.value, string(object(data), 'currency'), locale: context.isKhmer ? 'km' : 'en')
+                            : ['startsAt', 'endsAt', 'createdAt', 'updatedAt', 'completedAt', 'expiresAt', 'downloadedAt', 'retryAt'].contains(label(e.key.toString())) && e.value is String
                             ? travelDateTime(e.value, locale: context.isKhmer ? 'km' : 'en')
                             : ['startDate', 'endDate'].contains(label(e.key.toString())) && e.value is String
                             ? travelDate(e.value, locale: context.isKhmer ? 'km' : 'en')

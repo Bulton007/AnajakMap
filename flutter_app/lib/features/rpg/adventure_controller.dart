@@ -63,10 +63,18 @@ class AdventureState {
   final ApiFailure? failure;
   final DateTime? retryAt;
   bool get active => session?['status'] == 'active';
+  bool expiredAt(DateTime now) {
+    if (!active) return false;
+    final end = DateTime.tryParse(session?['expiresAt']?.toString() ?? '');
+    return end == null || !end.isAfter(now);
+  }
+
+  bool get expired => expiredAt(DateTime.now());
   bool get canAct =>
       !busy &&
       !pending &&
       !needsRefresh &&
+      !expired &&
       !(retryAt?.isAfter(DateTime.now()) ?? false);
 }
 
@@ -87,9 +95,29 @@ class AdventureController extends Notifier<AdventureState> {
   final (String, String) scope;
   String get realm => scope.$2;
   _Pending? _pending;
+  Timer? _expiry;
+  void _watchExpiry() {
+    _expiry?.cancel();
+    if (!state.active) return;
+    final end = DateTime.tryParse(
+      state.session?['expiresAt']?.toString() ?? '',
+    );
+    final delay = end?.difference(DateTime.now()) ?? Duration.zero;
+    _expiry = Timer(delay.isNegative ? Duration.zero : delay, () {
+      if (ref.mounted && state.expired) {
+        state = _state(
+          busy: state.busy,
+          failure: state.failure,
+          needsRefresh: true,
+        );
+      }
+    });
+  }
+
   AdventureRepository get repo => ref.read(adventureRepositoryProvider);
   @override
   AdventureState build() {
+    ref.onDispose(() => _expiry?.cancel());
     scheduleMicrotask(load);
     return const AdventureState(busy: true);
   }
@@ -125,6 +153,7 @@ class AdventureController extends Notifier<AdventureState> {
           capabilities: caps,
           session: snapshot.active,
         );
+        _watchExpiry();
       }
     } catch (e) {
       if (ref.mounted) state = _state(failure: _failure(e), needsRefresh: true);
@@ -210,6 +239,7 @@ class AdventureController extends Notifier<AdventureState> {
             snapshot.active ??
             (result.containsKey('battle') ? result : state.session),
       );
+      _watchExpiry();
     } catch (e) {
       if (!ref.mounted) return;
       final failure = _failure(e);

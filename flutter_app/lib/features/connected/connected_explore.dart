@@ -14,6 +14,9 @@ import 'connected_map.dart';
 import 'package:go_router/go_router.dart';
 import '../rpg/rpg_screen.dart';
 import 'recommendations.dart';
+import '../../shared/components/travel_success.dart';
+import '../../shared/components/offline_place_photo.dart';
+import 'cached_discovery.dart';
 
 Future<ServerTrip?> selectTrip(BuildContext context, WidgetRef ref) async {
   final trips = await runRequest(
@@ -193,23 +196,19 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
               label: Text(context.t(key)),
               onPressed: busy || submittedQuery.isEmpty
                   ? null
-                  : () => openScreen(
-                      context,
-                      Scaffold(
-                        appBar: AppBar(title: Text(context.t(key))),
-                        body: RemoteContent<Object?>(
-                          load: () => ref.read(repositoryProvider).discovery(
-                            key,
-                            {'query': submittedQuery},
+                  : () => key == 'routes'
+                        ? openScreen(context, ConnectedMap(places: places))
+                        : openScreen(
+                            context,
+                            Scaffold(
+                              appBar: AppBar(title: Text(context.t(key))),
+                              body: CachedDiscoveryInformation(
+                                operation: key,
+                                query: submittedQuery,
+                                profile: widget.profile,
+                              ),
+                            ),
                           ),
-                          builder: (result, _) => DiscoveryDetails(
-                            operation: key,
-                            query: submittedQuery,
-                            data: result,
-                          ),
-                        ),
-                      ),
-                    ),
             ),
           ActionChip(
             avatar: const Icon(Icons.map_rounded, size: 20),
@@ -271,6 +270,14 @@ class _ExploreState extends ConsumerState<ConnectedExplore> {
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: DestinationCard(
+            photoWidget: place['photo'] is Map
+                ? OfflinePlacePhoto(
+                    scope:
+                        '${ref.read(environmentProvider).normalizedUrl}|${widget.profile['id']}',
+                    name: string(place, 'name'),
+                    photo: object(place['photo']),
+                  )
+                : null,
             title: string(place, 'name'),
             photo: place['photo'] is Map ? object(place['photo']) : null,
             subtitle: string(
@@ -307,6 +314,34 @@ class ConnectedPlace extends ConsumerWidget {
         ),
         const SizedBox(height: 18),
         PlaceFacts(place: place),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final operation in ['weather', 'culture'])
+              ActionChip(
+                avatar: Icon(featureIcon(operation), size: 20),
+                label: Text(context.t(operation)),
+                onPressed: () => openScreen(
+                  context,
+                  Scaffold(
+                    appBar: AppBar(title: Text(context.t(operation))),
+                    body: CachedDiscoveryInformation(
+                      operation: operation,
+                      query: string(place, 'name'),
+                      profile: profile,
+                      parameters: {
+                        if (field(place, 'latitude') is num &&
+                            field(place, 'longitude') is num) ...{
+                          'latitude': field(place, 'latitude'),
+                          'longitude': field(place, 'longitude'),
+                        },
+                      },
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 18),
         if (place['rpgEligible'] != false)
           OutlinedButton.icon(
@@ -396,15 +431,16 @@ class ConnectedPlace extends ConsumerWidget {
           onPressed: () async {
             final scope =
                 '${ref.read(environmentProvider).normalizedUrl}|${profile['id']}';
-            await runRequest(
-              context,
-              () => ref
+            final saved = await runRequest(context, () async {
+              await ref
                   .read(databaseProvider)
-                  .cache(scope, 'place:${place['id']}', place),
-            );
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(context.t('savedPlacesLocal'))),
+                  .cache(scope, 'place:${place['id']}', place);
+              return true;
+            });
+            if (saved == true && context.mounted) {
+              showTravelSuccess(
+                context,
+                message: context.t('savedPlacesLocal'),
               );
             }
           },

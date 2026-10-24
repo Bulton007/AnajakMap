@@ -224,8 +224,10 @@ class DestinationCard extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.photo,
+    this.photoWidget,
   });
   final Map<String, dynamic>? photo;
+  final Widget? photoWidget;
   final String title, subtitle;
   final VoidCallback onTap;
   @override
@@ -239,7 +241,9 @@ class DestinationCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (photo != null)
+            if (photoWidget != null)
+              photoWidget!
+            else if (photo != null)
               PlacePhoto(name: title, photo: photo)
             else
               Container(

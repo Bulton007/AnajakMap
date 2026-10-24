@@ -77,3 +77,60 @@ See `AnajakMapBackend/AnajakMapBackend/deploy/laptop/README.md`. The current URL
 and Flutter configuration are stored only in ignored local files because the
 temporary hostname changes on a new tunnel run. Docker Desktop must stay running
 after Windows sign-in; plugged-in sleep and hibernation are already Never.
+
+## Companion and signed testing update — 24 October
+
+- Built and signature-verified Android 1.0.1, version code 3, target SDK 36,
+  using the existing app ID `com.anajak.anajak_travel` and local upload keystore.
+- Flutter: 108 tests passed, one opt-in live test skipped; analyzer clean.
+  Reviewed and updated the two registration-unavailable screen goldens.
+- AI module: 27 tests passed with mocked provider responses. Conversation
+  ownership, default-off context, text/metadata bounds and provider request
+  sanitization are covered. Shared platform tests also passed with four optional
+  database checks skipped in this run.
+- Chat now retains confirmed turns in the open screen, supports suggested
+  questions/copying, preserves failed drafts and honors server retry timing.
+  Sharing up to 12 previous messages requires the explicit English/Khmer switch;
+  older clients keep latest-question-only behavior.
+- New-PC `Update AI.cmd` validates a local Gemini key/model with one fictional
+  request, builds and restarts only the AI service. Script success/failure paths
+  were checked with simulated Google/Docker operations in Windows PowerShell 5.1.
+- The backend update has not been applied to the separate hosting PC by this
+  agent. Live Gemini acceptance and physical-device testing of build 3 remain
+  pending there. No new Play Console upload or publication is claimed.
+
+Instructions and limits: `AI_UPDATE.md`. Other production dependencies above
+remain outstanding; this testing update is not a claim that every feature is ready.
+
+## Audit and Android testing update 1.0.2 — 24 October
+
+- Preserved the existing architecture and completed batches documented in
+  `APP_AUDIT.md`: confirmed-save feedback, photo fallbacks/caching, current GPS
+  and real-provider routing adapter, destination weather, fixed 4000 KHR/USD,
+  readable dates/IDs, contact/notification cards, consent-gated photo recognition,
+  foreground random encounters, absolute expiry and responsive inventory.
+- Final Flutter regression: 126 passed / one opt-in live test skipped;
+  analyzer clean. Backend: 61 passed / 10 optional database checks skipped.
+  Model/provider requests were mocked; no user photo was sent to Google.
+- Signed Android 1.0.2, version code 4, target SDK 36 built successfully and
+  upload signature verified. Artifact: `.local/anajakmap-1.0.2-4.aab`.
+  Added the missing Cupertino icon font; final build has no missing-font warning.
+- New-PC source patch: `.local/anajak-backend-update-1.0.2.zip` with
+  `Update App Backend.cmd`. See `APP_UPDATE_SETUP.md`. No credentials included.
+  Updater syntax and laptop Compose configuration were validated; no update was
+  run on the separate hosting PC and no Play Console release was uploaded.
+- Photo recognition stays default-off until the operator verifies the configured
+  image model. Real router URL, destination cultural content, native push, reviewed
+  gameplay locations, stable public hosting, iOS and physical-device acceptance
+  remain dependencies. This is an internal-testing update, not production approval.
+
+## Extracted backend patch installer fix — 24 October
+
+- Fixed the missing `.env` update path: a complete extracted patch can install
+  its allowlisted source files into the one initialized hosting checkout, retaining
+  credentials and backing up overwritten source files before copying.
+- Added ambiguity/explicit-target guards, path/junction rejection, full validation
+  before writes, source hash checks, and a read-only `-CheckOnly` preview.
+- Windows PowerShell 5.1: 23 regression checks passed. Simulated full installation
+  verified overlay copying, backup creation, child updater execution and unchanged
+  `.env`; no real backend was restarted during these tests.

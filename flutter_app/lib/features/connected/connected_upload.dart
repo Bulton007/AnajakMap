@@ -13,19 +13,27 @@ Future<Json?> uploadMedia(
   String path, {
   String? tripId,
   bool audio = false,
+  bool imagesOnly = false,
 }) => showModalBottomSheet<Json>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
-  builder: (_) => _Upload(path: path, tripId: tripId, audio: audio),
+  builder: (_) =>
+      _Upload(path: path, tripId: tripId, audio: audio, imagesOnly: imagesOnly),
 );
 
 class _Upload extends ConsumerStatefulWidget {
-  const _Upload({required this.path, this.tripId, this.audio = false});
+  const _Upload({
+    required this.path,
+    this.tripId,
+    this.audio = false,
+    this.imagesOnly = false,
+  });
   final String path;
   final String? tripId;
   final bool audio;
+  final bool imagesOnly;
   @override
   ConsumerState<_Upload> createState() => _UploadState();
 }
@@ -55,6 +63,8 @@ class _UploadState extends ConsumerState<_Upload> {
           type: FileType.custom,
           allowedExtensions: widget.audio
               ? ['mp3', 'wav']
+              : widget.imagesOnly
+              ? ['png', 'jpg', 'jpeg']
               : ['png', 'jpg', 'jpeg', 'pdf'],
         );
         file = result?.xFile;
@@ -63,8 +73,10 @@ class _UploadState extends ConsumerState<_Upload> {
         return;
       }
       final bytes = await file.readAsBytes();
-      final max =
-          widget.path.startsWith('guide') || widget.path.startsWith('expenses')
+      final max = widget.imagesOnly
+          ? 4
+          : widget.path.startsWith('guide') ||
+                widget.path.startsWith('expenses')
           ? 5
           : 10;
       if (bytes.isEmpty || bytes.length > max * 1024 * 1024) {
@@ -79,7 +91,8 @@ class _UploadState extends ConsumerState<_Upload> {
         'mp3': 'audio/mpeg',
         'wav': 'audio/wav',
       }[ext];
-      if (mime == null) {
+      if (mime == null ||
+          (widget.imagesOnly && !['image/png', 'image/jpeg'].contains(mime))) {
         throw const FormatException('Unsupported file');
       }
       if (!mounted) {

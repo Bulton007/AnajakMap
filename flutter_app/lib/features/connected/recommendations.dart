@@ -7,6 +7,7 @@ import '../../core/network/api_client.dart';
 import '../../core/network/providers.dart';
 import '../../shared/components/components.dart';
 import '../../shared/components/place_photo.dart';
+import '../../shared/components/travel_success.dart';
 import '../../shared/components/remote.dart';
 import '../../shared/components/travel_panels.dart';
 import '../../shared/formatting/travel_dates.dart';
@@ -343,8 +344,9 @@ class _RecommendationsState extends ConsumerState<TripRecommendations> {
                   return true;
                 });
                 if (saved == true && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.t('savedPlacesLocal'))),
+                  showTravelSuccess(
+                    context,
+                    message: context.t('savedPlacesLocal'),
                   );
                 }
               },

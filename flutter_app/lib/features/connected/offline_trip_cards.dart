@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/formatting/travel_money.dart';
 import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
 import '../../shared/components/components.dart';
@@ -186,7 +187,11 @@ class PendingChangePreview extends StatelessWidget {
           if (kind == 'expense')
             IconFact(
               Icons.payments_outlined,
-              '${body['amount']} ${body['currency']}',
+              travelMoney(
+                body['amount'],
+                string(body, 'currency'),
+                locale: context.isKhmer ? 'km' : 'en',
+              ),
             ),
           if (kind == 'journal') Text(string(body, 'content')),
         ],

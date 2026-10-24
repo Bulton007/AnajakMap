@@ -301,6 +301,72 @@ void main() {
     );
     expect(container.read(authControllerProvider).authenticated, false);
   });
+  for (final refreshByResume in [false, true]) {
+    testWidgets(
+      'registration refreshes server availability ${refreshByResume ? 'on resume' : 'on request'} without losing inputs',
+      (tester) async {
+        var available = false;
+        var requests = 0;
+        final dio = Dio()
+          ..httpClientAdapter = Transport((r) async {
+            requests++;
+            return response({
+              ...config,
+              'emailDelivery': available,
+              'registration': available,
+            });
+          });
+        final container = await launch(
+          tester,
+          route: '/auth',
+          environment: const Environment(),
+          api: ApiClient(
+            'https://test/api/v1/',
+            MemoryCredentials(),
+            transport: dio,
+          ),
+        );
+        container.read(authControllerProvider.notifier).flow(AuthFlow.register);
+        await tester.pumpAndSettle();
+        final fields = find.byType(TextFormField);
+        await tester.enterText(fields.at(0), 'Traveler');
+        await tester.enterText(fields.at(1), 'traveler@example.test');
+        expect(
+          container.read(authConfigurationProvider).requireValue.registration,
+          false,
+        );
+        final before = requests;
+        available = true;
+        if (refreshByResume) {
+          for (final lifecycle in [
+            AppLifecycleState.inactive,
+            AppLifecycleState.hidden,
+            AppLifecycleState.paused,
+            AppLifecycleState.hidden,
+            AppLifecycleState.inactive,
+            AppLifecycleState.resumed,
+          ]) {
+            tester.binding.handleAppLifecycleStateChanged(lifecycle);
+          }
+        } else {
+          await tester.ensureVisible(find.text('Check again'));
+          await tester.tap(find.text('Check again'));
+        }
+        await tester.pumpAndSettle();
+        expect(requests, greaterThan(before));
+        expect(
+          container.read(authConfigurationProvider).requireValue.registration,
+          true,
+        );
+        expect(find.text('Check again'), findsNothing);
+        expect(find.text('Traveler'), findsOneWidget);
+        expect(find.text('traveler@example.test'), findsOneWidget);
+        expect(container.read(authControllerProvider).authenticated, false);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   for (final locale in ['en', 'km']) {
     testWidgets(
       'registration $locale keeps consent explicit and fields reachable',

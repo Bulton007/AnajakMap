@@ -17,7 +17,10 @@ Json session([String status = 'active']) => {
   'id': 'battle-1',
   'revision': status == 'active' ? 0 : 1,
   'status': status,
-  'expiresAt': '2026-10-16T23:59:59Z',
+  'expiresAt': DateTime.now()
+      .add(const Duration(minutes: 15))
+      .toUtc()
+      .toIso8601String(),
   'battle': {
     'ally': {
       'speciesId': 'mossling',

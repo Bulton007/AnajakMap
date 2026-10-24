@@ -21,6 +21,7 @@ class ConnectedMap extends ConsumerWidget {
             ? Future.value(places)
             : ref.read(repositoryProvider).map(trip!.id),
         builder: (rows, _) => TravelOpenMap(
+          navigation: true,
           onPlaceSelected: (place) => showModalBottomSheet<void>(
             context: context,
             showDragHandle: true,

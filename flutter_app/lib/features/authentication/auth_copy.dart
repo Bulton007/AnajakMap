@@ -103,9 +103,10 @@ const _copy = <String, List<String>>{
     'ការចូលតាម Google និង Apple មិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។',
   ],
   'authUnavailable': [
-    'Email delivery is not configured yet. Existing verified accounts can still sign in.',
-    'ការផ្ញើអ៊ីមែលមិនទាន់បានកំណត់ទេ។ គណនីដែលបានផ្ទៀងផ្ទាត់រួចអាចចូលបាន។',
+    'Account creation and password recovery are temporarily unavailable. You can still sign in with a verified account. Check again shortly.',
+    'ការបង្កើតគណនី និងការស្ដារពាក្យសម្ងាត់មិនអាចប្រើបានជាបណ្ដោះអាសន្ន។ អ្នកនៅតែអាចចូលគណនីដែលបានផ្ទៀងផ្ទាត់រួច។ សូមពិនិត្យម្ដងទៀតនៅពេលបន្តិចទៀត។',
   ],
+  'authCheckAgain': ['Check again', 'ពិនិត្យម្ដងទៀត'],
   'authNetwork': [
     'Cannot reach the server. Check your connection and try again. You have not been signed in.',
     'មិនអាចភ្ជាប់ម៉ាស៊ីនមេបាន។ សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្ដងទៀត។ អ្នកមិនទាន់បានចូលគណនីទេ។',

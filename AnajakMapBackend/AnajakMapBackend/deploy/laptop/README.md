@@ -92,6 +92,26 @@ This cannot be called a stable 24/7 production endpoint. For the final release,
 use a domain and named Cloudflare Tunnel, or persistent hosted infrastructure.
 Do not publish the Play Store app with a `trycloudflare.com` address.
 
+## Enable real Gmail verification on the hosting PC
+
+Double-click `Configure Email.cmd` in the repository root, or run
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/configure-gmail.ps1`
+from the backend directory. Run it on the same PC as the public tunnel.
+
+The setup prompts for the sender and a hidden Google App Password, removes the
+spaces Google uses for display, and sends one test only to the sender. It saves
+the credentials in the existing ignored `.env` only after Gmail accepts the
+test, recreates only `identity-service`, and waits for the local public auth
+configuration to enable both email and registration. It leaves the tunnel
+running so the address does not change. A valid Terms URL, Privacy URL and policy
+version are also required. Never copy credentials into Flutter or GitHub.
+
+Check the inbox/spam folder, then test registration, received verification,
+verification submission and login with your own test address in the installed
+app. SMTP acceptance alone does not prove inbox delivery or the full app flow.
+Google two-step verification and App Password availability are required for this
+password-based SMTP setup. Sending quotas and filtering still apply.
+
 Stop public access while keeping the local backend running:
 
 ```powershell

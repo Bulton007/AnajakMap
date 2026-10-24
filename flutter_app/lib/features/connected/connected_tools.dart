@@ -11,6 +11,8 @@ import '../../shared/models/server_models.dart';
 import '../../shared/components/components.dart';
 import '../../shared/components/remote.dart';
 import 'connected_upload.dart';
+import 'companion_chat.dart';
+import '../../shared/components/travel_alerts.dart';
 import 'connected_explore.dart';
 import 'connected_generation.dart';
 import 'recommendations.dart';
@@ -549,6 +551,16 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
             if (objects(data).isEmpty) Text(context.t('empty')),
           ] else if (widget.tool == 'calendar') ...[
             CalendarPanel(data: object(data), zone: widget.trip!.timezone),
+          ] else if (widget.tool == 'contacts') ...[
+            if (objects(data).isEmpty) Text(context.t('empty')),
+            for (final contact in objects(data))
+              EmergencyContactCard(contact: contact),
+          ] else if (widget.tool == 'notifications') ...[
+            if (objects(data).isEmpty) Text(context.t('empty')),
+            for (final delivery in {
+              for (final item in objects(data)) string(item, 'id'): item,
+            }.values)
+              TravelNotificationCard(delivery: delivery),
           ] else ...[
             const SizedBox(height: 16),
             ServerResult(data),
@@ -666,12 +678,26 @@ class CompanionTasks extends ConsumerWidget {
             VisualAction(
               icon: featureIcon(task),
               label: context.t(task),
-              subtitle: task == 'vision' || task == 'voice'
+              subtitle:
+                  task == 'voice' ||
+                      (task == 'vision' &&
+                          ref
+                                  .watch(guideCapabilitiesProvider)
+                                  .asData
+                                  ?.value['vision'] !=
+                              true)
                   ? (Localizations.localeOf(context).languageCode == 'km'
                         ? 'មិនទាន់មាននៅឡើយ'
                         : 'Not available yet')
                   : null,
-              onTap: task == 'vision' || task == 'voice'
+              onTap:
+                  task == 'voice' ||
+                      (task == 'vision' &&
+                          ref
+                                  .watch(guideCapabilitiesProvider)
+                                  .asData
+                                  ?.value['vision'] !=
+                              true)
                   ? null
                   : () async {
                       if (task == 'generate') {
@@ -685,7 +711,9 @@ class CompanionTasks extends ConsumerWidget {
                       } else {
                         openScreen(
                           context,
-                          AssistanceTask(task: task, profile: profile),
+                          task == 'chat'
+                              ? const CompanionChat()
+                              : AssistanceTask(task: task, profile: profile),
                         );
                       }
                     },
@@ -706,6 +734,7 @@ class AssistanceTask extends ConsumerStatefulWidget {
 
 class _AssistanceState extends ConsumerState<AssistanceTask> {
   Object? result;
+  bool submitting = false;
   String? conversationId;
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -722,57 +751,112 @@ class _AssistanceState extends ConsumerState<AssistanceTask> {
         Notice(context.t('aiTrustBody')),
         const SizedBox(height: 20),
         FilledButton.icon(
-          onPressed: () async {
-            final repo = ref.read(repositoryProvider);
-            if (widget.task == 'vision' || widget.task == 'voice') {
-              final media = await uploadMedia(
-                context,
-                'guide/media',
-                audio: widget.task == 'voice',
-              );
-              if (media == null || !context.mounted) {
-                return;
-              }
-              final data = await runRequest(
-                context,
-                () => repo.guide(widget.task, {'mediaId': media['mediaId']}),
-              );
-              if (mounted) {
-                setState(() => result = data);
-              }
-            } else {
-              final data = await remoteForm(
-                context,
-                widget.task,
-                [
-                  InputSpec(
-                    'text',
-                    label: widget.task == 'chat'
-                        ? 'message'
-                        : 'translationText',
-                    kind: InputKind.multiline,
-                  ),
-                  if (widget.task != 'chat')
-                    const InputSpec(
-                      'targetLanguage',
-                      initial: 'km',
-                      choices: ['km', 'en'],
-                    ),
-                ],
-                submitLabel: 'confirm',
-                submit: (body, _) async {
-                  if (widget.task == 'chat') {
-                    conversationId ??= string(await repo.conversation(), 'id');
-                    return repo.message(conversationId!, body['text']);
+          onPressed: submitting
+              ? null
+              : () async {
+                  final repo = ref.read(repositoryProvider);
+                  if (widget.task == 'vision' || widget.task == 'voice') {
+                    if (submitting) return;
+                    setState(() => submitting = true);
+                    if (widget.task == 'vision') {
+                      final consent = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: Text(
+                            context.isKhmer
+                                ? 'ចែករំលែករូបថតជាមួយ AI?'
+                                : 'Share a photo with AI?',
+                          ),
+                          content: Text(
+                            context.isKhmer
+                                ? 'រូបថតដែលអ្នកជ្រើសរើស និងទិន្នន័យភ្ជាប់របស់វា នឹងផ្ញើទៅម៉ាស៊ីនមេ និង Google Gemini។ ជៀសវាងមុខមនុស្ស ឯកសារឯកជន និងព័ត៌មានរសើប។ លទ្ធផលអាចខុស។'
+                                : 'Your selected photo, including any embedded metadata, will be uploaded to our backend and Google Gemini. Avoid faces, private documents and sensitive information. Recognition can be wrong.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: Text(context.t('cancel')),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: Text(
+                                context.isKhmer
+                                    ? 'យល់ព្រម និងជ្រើសរូបថត'
+                                    : 'Agree and choose photo',
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (consent != true || !context.mounted) {
+                        if (mounted) setState(() => submitting = false);
+                        return;
+                      }
+                    }
+                    setState(() => submitting = true);
+                    try {
+                      final media = await uploadMedia(
+                        context,
+                        'guide/media',
+                        audio: widget.task == 'voice',
+                        imagesOnly: widget.task == 'vision',
+                      );
+                      if (media == null || !context.mounted) {
+                        return;
+                      }
+                      final data = await runRequest(
+                        context,
+                        () => repo.guide(widget.task, {
+                          'mediaId': media['mediaId'],
+                          if (widget.task == 'vision')
+                            'shareWithProvider': true,
+                          'language': context.isKhmer ? 'km' : 'en',
+                        }),
+                      );
+                      if (mounted) {
+                        setState(() => result = data);
+                      }
+                    } finally {
+                      if (mounted) setState(() => submitting = false);
+                    }
+                  } else {
+                    final data = await remoteForm(
+                      context,
+                      widget.task,
+                      [
+                        InputSpec(
+                          'text',
+                          label: widget.task == 'chat'
+                              ? 'message'
+                              : 'translationText',
+                          kind: InputKind.multiline,
+                        ),
+                        if (widget.task != 'chat')
+                          const InputSpec(
+                            'targetLanguage',
+                            initial: 'km',
+                            choices: ['km', 'en'],
+                          ),
+                      ],
+                      submitLabel: 'confirm',
+                      submit: (body, _) async {
+                        if (widget.task == 'chat') {
+                          conversationId ??= string(
+                            await repo.conversation(),
+                            'id',
+                          );
+                          return repo.message(conversationId!, body['text']);
+                        }
+                        return repo.guide('translation', body);
+                      },
+                    );
+                    if (mounted && data != null) {
+                      setState(() => result = data);
+                    }
                   }
-                  return repo.guide('translation', body);
                 },
-              );
-              if (mounted && data != null) {
-                setState(() => result = data);
-              }
-            }
-          },
           icon: Icon(
             widget.task == 'translate'
                 ? Icons.translate

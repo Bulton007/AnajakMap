@@ -1,10 +1,28 @@
 import 'package:flutter/material.dart';
+import '../../shared/formatting/travel_dates.dart';
 import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
 import '../../shared/components/components.dart';
 import '../../shared/components/visual.dart';
 import '../../shared/components/place_photo.dart';
 import '../maps/open_map_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+String weatherSummary(Object? value, bool khmer) {
+  final code = value is num ? value.toInt() : -1;
+  final pair = switch (code) {
+    0 => ('Clear sky', 'មេឃស្រឡះ'),
+    1 || 2 => ('Partly cloudy', 'មានពពកខ្លះ'),
+    3 => ('Overcast', 'មេឃពពក'),
+    45 || 48 => ('Fog', 'អ័ព្ទ'),
+    51 || 53 || 55 || 56 || 57 => ('Drizzle', 'ភ្លៀងរលឹម'),
+    61 || 63 || 65 || 66 || 67 || 80 || 81 || 82 => ('Rain', 'ភ្លៀង'),
+    71 || 73 || 75 || 77 || 85 || 86 => ('Snow', 'ព្រិល'),
+    95 || 96 || 99 => ('Thunderstorm', 'ព្យុះផ្គររន្ទះ'),
+    _ => ('Weather information unavailable', 'មិនមានព័ត៌មានអាកាសធាតុ'),
+  };
+  return khmer ? pair.$2 : pair.$1;
+}
 
 class PlaceFacts extends StatelessWidget {
   const PlaceFacts({super.key, required this.place});
@@ -145,6 +163,22 @@ class DiscoveryDetails extends StatelessWidget {
             title: '${field(value, 'temperatureCelsius')} °C',
             subtitle: string(value, 'condition'),
           ),
+        if (field(value, 'weatherCode') != null)
+          _Fact(
+            icon: Icons.cloud_outlined,
+            title: weatherSummary(field(value, 'weatherCode'), context.isKhmer),
+          ),
+        if (operation == 'weather' && string(value, 'updatedAt').isNotEmpty)
+          _Fact(
+            icon: Icons.update,
+            title: travelDateTime(
+              string(value, 'updatedAt'),
+              locale: context.isKhmer ? 'km' : 'en',
+            ),
+            subtitle: context.isKhmer
+                ? 'ទិន្នន័យពីអ្នកផ្ដល់សេវា · ឃ្លាំងសម្ងាត់រហូតដល់ ១៥ នាទី'
+                : 'Provider observation · cached for up to 15 minutes',
+          ),
         if (field(value, 'durationMinutes') != null)
           _Fact(
             icon: Icons.schedule_rounded,
@@ -170,6 +204,16 @@ class DiscoveryDetails extends StatelessWidget {
               string(value, 'source'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
+          ),
+        if (operation == 'weather' &&
+            string(value, 'sourceUrl') == 'https://open-meteo.com/')
+          TextButton.icon(
+            onPressed: () => launchUrl(
+              Uri.parse('https://open-meteo.com/'),
+              mode: LaunchMode.externalApplication,
+            ),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Weather data: Open-Meteo'),
           ),
       ],
     );

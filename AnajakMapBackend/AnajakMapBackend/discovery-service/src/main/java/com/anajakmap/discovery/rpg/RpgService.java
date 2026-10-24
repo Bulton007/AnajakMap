@@ -27,6 +27,7 @@ public class RpgService {
   private final Clock clock;
   private final Random random;
   private final RpgProgression progression;
+  private final int encounterTtl;
 
   @org.springframework.beans.factory.annotation.Autowired
   public RpgService(JdbcTemplate db, Changes changes, ObjectMapper json,
@@ -38,6 +39,8 @@ public class RpgService {
       Environment env,boolean simulation,Clock clock,Random random) {
     this.db=db;this.changes=changes;this.json=json;tx=new TransactionTemplate(manager);
     this.clock=clock;this.random=random;
+    encounterTtl=env.getProperty("RPG_ENCOUNTER_TTL_SECONDS",Integer.class,900);
+    if(encounterTtl<60||encounterTtl>3600)throw new IllegalArgumentException("Encounter expiry must be 60–3600 seconds");
     this.progression=new RpgProgression(db,clock);
     practice=simulation && Arrays.stream(env.getActiveProfiles()).anyMatch(p->p.equals("dev")||p.equals("test"));
   }
@@ -101,7 +104,7 @@ public class RpgService {
     return tx.execute(status->{lock(actor,realm,scope); expire(scope);return snapshot(scope,realm);});
   }
   private void expire(String scope) {
-    db.update("UPDATE rpg_sessions SET status='expired' WHERE scope_id=? AND status='active' AND expires_at<?",scope,Timestamp.from(clock.instant()));
+    db.update("UPDATE rpg_sessions SET status='expired' WHERE scope_id=? AND status='active' AND expires_at<=?",scope,Timestamp.from(clock.instant()));
   }
   private Map<String,Object> snapshot(String scope,String realm) {
     var p=db.queryForMap("SELECT xp,gold,wins,captures,next_encounter,daily_count,equipped_title FROM rpg_players WHERE scope_id=?",scope);
@@ -167,7 +170,7 @@ public class RpgService {
       int enemyLevel=boss?number(d,"BOSS_LEVEL"):Math.clamp(level-1,number(d,"ENEMY_LEVEL_MIN"),number(d,"ENEMY_LEVEL_MAX"));
       var battle=new RpgRules.Battle(RpgRules.fighter(owned.get("SPECIES_ID").toString(),level,number(owned,"VARIATION"),number(owned,"EVOLUTION")),RpgRules.fighter(enemy.id(),enemyLevel,random.nextInt(6),boss?2:0),Math.min(3,progression.quantity(scope,"crystal")),Math.min(2,progression.quantity(scope,"potion")),0,"active",List.of(boss?"Guardian challenge started":"Encounter started"),boss);
       String id=UUID.randomUUID().toString();
-      db.update("INSERT INTO rpg_sessions(id,scope_id,destination_id,monster_id,state,status,expires_at,kind) VALUES(?,?,?,?,?,'active',?,?)",id,scope,body.destinationId,body.monsterId,changes.json(battle),Timestamp.from(now.plusSeconds(900)),boss?"boss":"wild");
+      db.update("INSERT INTO rpg_sessions(id,scope_id,destination_id,monster_id,state,status,expires_at,kind) VALUES(?,?,?,?,?,'active',?,?)",id,scope,body.destinationId,body.monsterId,changes.json(battle),Timestamp.from(now.plusSeconds(encounterTtl)),boss?"boss":"wild");
       for(var member:party) {
         var m=db.queryForMap("SELECT * FROM rpg_monsters WHERE id=? AND scope_id=?",member.get("MONSTER_ID"),scope);
         db.update("INSERT INTO rpg_combatants(session_id,monster_id,state) VALUES(?,?,?)",id,member.get("MONSTER_ID"),changes.json(RpgRules.fighter(m.get("SPECIES_ID").toString(),RpgRules.level(number(m,"XP")),number(m,"VARIATION"),number(m,"EVOLUTION"))));

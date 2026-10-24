@@ -113,4 +113,13 @@ class TravelDatabase extends GeneratedDatabase {
     await customStatement('DELETE FROM cache WHERE scope=?', [scope]);
     await customStatement('DELETE FROM operations WHERE scope=?', [scope]);
   });
+  Future<void> pruneCache(
+    String scope,
+    String prefix,
+    int keep,
+  ) => customStatement(
+    'DELETE FROM cache WHERE scope=? AND key LIKE ? AND key NOT IN '
+    '(SELECT key FROM cache WHERE scope=? AND key LIKE ? ORDER BY saved_at DESC LIMIT ?)',
+    [scope, '$prefix%', scope, '$prefix%', keep],
+  );
 }

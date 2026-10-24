@@ -20,6 +20,8 @@ public class DiscoveryApi {
   private final RateLimit limit;
   private final PhotonPlaces photon;
   private final PlacePhotos photos;
+  private final OsrmRoutes routes;
+  private final DestinationWeather weather;
 
   public DiscoveryApi(
       Environment e,
@@ -27,7 +29,9 @@ public class DiscoveryApi {
       @Value("${anajak.provider-key}") String k,
       StringRedisTemplate r,
       Changes c,
-      RateLimit l, PhotonPlaces photon, PlacePhotos photos) {
+      RateLimit l, PhotonPlaces photon, PlacePhotos photos, OsrmRoutes routes, DestinationWeather weather) {
+    this.weather = weather;
+    this.routes = routes;
     this.photon = photon;
     this.photos = photos;
     dev =
@@ -103,9 +107,18 @@ public class DiscoveryApi {
 
   @GetMapping("/{operation:weather|food|culture|transport|routes}")
   public Object information(
-      @PathVariable String operation, @RequestParam Map<String, String> params) {
+      @PathVariable String operation, @RequestParam Map<String, String> params,
+      @AuthenticationPrincipal Jwt jwt) {
     if (params.size() > 15 || params.values().stream().anyMatch(v -> v.length() > 200))
       throw new IllegalArgumentException();
+    if (operation.equals("routes")) {
+      limit.check("routes:" + jwt.getSubject(), 20, 60);
+      return routes.route(params);
+    }
+    if (operation.equals("weather")) {
+      limit.check("weather:" + jwt.getSubject(), 30, 60);
+      return weather.weather(params);
+    }
     if (dev)
       return switch (operation) {
         case "weather" ->

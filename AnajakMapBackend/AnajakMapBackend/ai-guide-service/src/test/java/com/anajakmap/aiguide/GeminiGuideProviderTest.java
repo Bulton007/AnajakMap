@@ -26,6 +26,16 @@ class GeminiGuideProviderTest {
     var result=provider.perform("chat", Map.of("text", "Hello"));
     assertEquals("សួស្តី",result.get("text")); assertEquals(false,result.get("mock")); server.verify();
   }
+  @Test void optedInContextContainsOnlyBoundedConversationText() throws Exception {
+    server.expect(anything())
+        .andExpect(content().string(org.hamcrest.Matchers.containsString("earlier coast question")))
+        .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("private-owner-id"))))
+        .andRespond(withSuccess("{\"candidates\":[{\"finishReason\":\"STOP\",\"content\":{\"parts\":[{\"text\":\"{\\\"text\\\":\\\"Follow-up answer\\\"}\"}]}}]}", MediaType.APPLICATION_JSON));
+    var result = provider.perform("chat", Map.of("text", "And tomorrow?", "history", List.of(
+        Map.of("role", "USER", "content", "earlier coast question", "owner_id", "private-owner-id"))));
+    assertEquals("Follow-up answer", result.get("text"));
+    server.verify();
+  }
   @Test void missingKeyAndUnsupportedOperationsDoNotCallProvider() {
     var missing=new GeminiGuideProvider("", "gemini-3.8-flash", builder.build());
     assertEquals(503,assertThrows(ResponseStatusException.class,()->missing.perform("chat",Map.of("text","Hello"))).getStatusCode().value());

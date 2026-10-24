@@ -18,6 +18,8 @@ abstract final class Tokens {
   static const gap = 16.0;
   static const target = 48.0;
   static const motion = Duration(milliseconds: 220);
+  static const mapDestination = Color(0xFFB3261E);
+  static const mapRoute = Color(0xFF246BCE);
 
   static ({Color background, Color foreground}) accent(
     BuildContext context,

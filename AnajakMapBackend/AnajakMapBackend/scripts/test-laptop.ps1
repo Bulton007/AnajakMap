@@ -21,3 +21,11 @@ foreach ($check in @(
     Write-Host "$($check[0]): $status"
 }
 Write-Host 'Proxy routing, authentication boundary and blocked internal paths passed.'
+$auth = Invoke-RestMethod "$BaseUrl/api/v1/auth/config" -TimeoutSec 15
+if ($auth.data.emailDelivery -ne $true) {
+    Write-Warning 'Email delivery is disabled. Run Configure Email.cmd on this hosting PC before testing registration or recovery.'
+} elseif ($auth.data.registration -ne $true) {
+    Write-Warning 'Registration is disabled. Check the Terms URL, Privacy URL and policy version in the backend .env.'
+} else {
+    Write-Host 'Registration and email delivery are configured. Verify actual inbox delivery with your own test account.'
+}

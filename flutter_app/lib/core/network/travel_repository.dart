@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../shared/models/server_models.dart';
 import 'api_client.dart';
+import '../../shared/models/map_route.dart';
 
 /// Matches the Spring controllers. JSON is retained for provider-defined metadata;
 /// trip/activity/job boundaries are typed and Oracle projection casing is normalized.
@@ -182,6 +183,24 @@ class TravelRepository {
   );
   Future<Object?> discovery(String operation, Json query) =>
       client.request('GET', 'discovery/$operation', query: query);
+  Future<MapRoute> route(
+    double originLat,
+    double originLon,
+    double destinationLat,
+    double destinationLon,
+  ) async => MapRoute.fromJson(
+    object(
+      await discovery('routes', {
+        'originLat': originLat,
+        'originLon': originLon,
+        'destinationLat': destinationLat,
+        'destinationLon': destinationLon,
+        'mode': 'driving',
+      }),
+    ),
+  );
+  Future<Object?> guideCapabilities() =>
+      client.request('GET', 'guide/capabilities');
   Future<Object?> guide(String operation, Json input) =>
       client.request('POST', 'guide/$operation', body: {'input': input});
   Future<Json> conversation() async => object(
@@ -191,11 +210,12 @@ class TravelRepository {
       body: <String, dynamic>{},
     ),
   );
-  Future<Object?> message(String id, String text) => client.request(
-    'POST',
-    'guide/conversations/$id/messages',
-    body: {'text': text},
-  );
+  Future<Object?> message(String id, String text, {bool useContext = false}) =>
+      client.request(
+        'POST',
+        'guide/conversations/$id/messages',
+        body: {'text': text, if (useContext) 'useContext': true},
+      );
   Future<List<Json>> messages(String id, {int page = 0}) async => objects(
     await client.request(
       'GET',

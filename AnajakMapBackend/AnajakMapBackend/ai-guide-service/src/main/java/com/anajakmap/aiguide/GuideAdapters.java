@@ -13,9 +13,10 @@ public class GuideAdapters {
   @Bean
   @ConditionalOnProperty(name = "AI_PROVIDER", havingValue = "gemini")
   GuideProvider gemini(@Value("${GEMINI_API_KEY:}") String key,
-      @Value("${GEMINI_MODEL:gemini-3.8-flash}") String model) {
+      @Value("${GEMINI_MODEL:gemini-3.8-flash}") String model,
+      @Value("${GEMINI_VISION_ENABLED:false}") boolean visionEnabled) {
     return new GeminiGuideProvider(key, model,
-        HttpClients.client("https://generativelanguage.googleapis.com", Duration.ofSeconds(45)));
+        HttpClients.client("https://generativelanguage.googleapis.com", Duration.ofSeconds(45)), visionEnabled);
   }
 
   @Bean

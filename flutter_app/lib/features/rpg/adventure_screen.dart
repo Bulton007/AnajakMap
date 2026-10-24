@@ -1,4 +1,6 @@
 import 'creature_avatar.dart';
+import 'dart:async';
+import 'encounter_policy.dart';
 import '../../shared/components/visual.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +13,8 @@ import 'adventure_controller.dart';
 import 'adventure_repository.dart';
 import 'adventure_management.dart';
 import 'battle_scene.dart';
+import 'encounter_countdown.dart';
+import '../../shared/formatting/travel_dates.dart';
 import 'rpg_game.dart';
 import 'rpg_screen.dart';
 
@@ -26,11 +30,60 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
   String? destination, lead;
   bool safe = false;
   bool boss = false;
+  bool discover = false, awaitingFight = false;
+  Timer? discoveryTimer;
+  final encounters = EncounterPolicy(
+    probability:
+        const int.fromEnvironment('RPG_ENCOUNTER_PERCENT', defaultValue: 25) /
+        100,
+    cooldown: const Duration(
+      seconds: int.fromEnvironment(
+        'RPG_ENCOUNTER_COOLDOWN_SECONDS',
+        defaultValue: 300,
+      ),
+    ),
+  );
   String t(String en, String km) => rpgText(context, en, km);
   @override
   void initState() {
     super.initState();
     destination = widget.destinationId;
+    discoveryTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => checkEncounter(),
+    );
+  }
+
+  Future<void> checkEncounter() async {
+    if (!mounted ||
+        !discover ||
+        !safe ||
+        realm != 'field' ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        !TickerMode.valuesOf(context).enabled) {
+      return;
+    }
+    final auth = ref.read(authControllerProvider);
+    if (!auth.authenticated || destination == null || lead == null) return;
+    final scope = (auth.session!.user.id, realm);
+    final state = ref.read(adventureProvider(scope));
+    if (!encounters.roll(
+      DateTime.now(),
+      eligible: state.canAct && !state.active,
+    )) {
+      return;
+    }
+    setState(() => awaitingFight = true);
+    await ref
+        .read(adventureProvider(scope).notifier)
+        .start(destination!, lead!, safe);
+  }
+
+  @override
+  void dispose() {
+    discoveryTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -249,7 +302,15 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                     ],
                   ),
                   if (state.session != null)
-                    _battle(state, snapshot, controller),
+                    if (!state.expired)
+                      _battle(state, snapshot, controller)
+                    else
+                      _notice(
+                        t(
+                          'Encounter expired. Refresh to continue; no reward is granted for expiry.',
+                          'ការជួបនេះផុតកំណត់ហើយ។ ផ្ទុកឡើងវិញដើម្បីបន្ត។',
+                        ),
+                      ),
                   _heading(t('Choose your destination', 'ជ្រើសរើសគោលដៅ')),
                   Text(
                     t(
@@ -404,6 +465,31 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                       ),
                     ),
                   ),
+                  if (realm == 'field')
+                    SwitchListTile(
+                      value: discover,
+                      onChanged:
+                          safe &&
+                              eligible &&
+                              monsterId != null &&
+                              state.canAct &&
+                              !state.active
+                          ? (value) => setState(() {
+                              discover = value;
+                              lead = monsterId;
+                            })
+                          : null,
+                      secondary: const Icon(Icons.radar),
+                      title: Text(
+                        t('Discover random creatures', 'ស្វែងរកសត្វដោយចៃដន្យ'),
+                      ),
+                      subtitle: Text(
+                        t(
+                          'Optional checks while this page is open and you remain safely stationary. The server verifies location and limits encounters.',
+                          'ពិនិត្យនៅពេលទំព័រនេះបើក ហើយអ្នកនៅទីតាំងមានសុវត្ថិភាព។ ម៉ាស៊ីនមេផ្ទៀងផ្ទាត់ទីតាំង និងកម្រិតការជួប។',
+                        ),
+                      ),
+                    ),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
@@ -450,50 +536,60 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                       ),
                     ),
                   ),
-                  _heading(t('Bestiary', 'បញ្ជីប្រភេទសត្វ')),
-                  VisualActions(
+                  ExpansionTile(
+                    title: Text(
+                      t(
+                        'Creature guide · not nearby encounters',
+                        'បញ្ជីសត្វ · មិនមែនការជួបនៅជិតទេ',
+                      ),
+                    ),
+                    leading: const Icon(Icons.menu_book_outlined),
                     children: [
-                      for (final s in snapshot.species)
-                        Card(
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => AdventureManagement(
-                                  scope: (auth.session!.user.id, realm),
+                      VisualActions(
+                        children: [
+                          for (final s in snapshot.species)
+                            Card(
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => AdventureManagement(
+                                      scope: (auth.session!.user.id, realm),
+                                    ),
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    children: [
+                                      if (creatures.any((c) => c.id == s['id']))
+                                        SizedBox(
+                                          height: 110,
+                                          child: CreaturePortrait(
+                                            creature: creatures.firstWhere(
+                                              (c) => c.id == s['id'],
+                                            ),
+                                          ),
+                                        ),
+                                      Text(
+                                        string(s, 'name'),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                      Text(
+                                        string(s, 'rarity'),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                children: [
-                                  if (creatures.any((c) => c.id == s['id']))
-                                    SizedBox(
-                                      height: 110,
-                                      child: CreaturePortrait(
-                                        creature: creatures.firstWhere(
-                                          (c) => c.id == s['id'],
-                                        ),
-                                      ),
-                                    ),
-                                  Text(
-                                    string(s, 'name'),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                  Text(
-                                    string(s, 'rarity'),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                        ],
+                      ),
                     ],
                   ),
                   ExpansionTile(
@@ -515,7 +611,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                             '${integer(r, 'xp')} XP • ${integer(r, 'gold')} ${t('gold', 'មាស')}',
                           ),
                           subtitle: Text(
-                            '${string(r, 'kind')} • ${string(r, 'createdAt')}',
+                            '${string(r, 'kind')} • ${travelDateTime(string(r, 'createdAt'), locale: Localizations.localeOf(context).languageCode)}',
                           ),
                         ),
                     ],
@@ -556,6 +652,46 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
       'capture': t('Capture', 'ចាប់'),
       'retreat': t('Retreat', 'ដកថយ'),
     };
+    if (state.active && awaitingFight) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Text(
+                t('A creature appeared!', 'សត្វមួយបានបង្ហាញខ្លួន!'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              BattleScene(key: ValueKey(session['id']), session: session),
+              Text(
+                '${string(snapshot.speciesFor(species), 'name', species)} · Lv ${integer(enemy, 'level')}',
+              ),
+              EncounterCountdown(expiresAt: string(session, 'expiresAt')),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: state.canAct
+                        ? () => setState(() => awaitingFight = false)
+                        : null,
+                    icon: const Icon(Icons.sports_martial_arts),
+                    label: Text(t('Fight', 'ប្រយុទ្ធ')),
+                  ),
+                  OutlinedButton(
+                    onPressed: state.canAct
+                        ? () => controller.move('retreat')
+                        : null,
+                    child: Text(t('Ignore', 'មិនអើពើ')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -594,7 +730,16 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                 runSpacing: 8,
                 children: [
                   for (final move in labels.entries)
-                    OutlinedButton(
+                    OutlinedButton.icon(
+                      icon: Icon(switch (move.key) {
+                        'strike' => Icons.sports_martial_arts,
+                        'magic' => Icons.auto_awesome,
+                        'burst' => Icons.bolt,
+                        'guard' => Icons.shield_outlined,
+                        'heal' => Icons.healing,
+                        'capture' => Icons.diamond_outlined,
+                        _ => Icons.directions_run,
+                      }),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(100, 48),
                       ),
@@ -614,7 +759,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                                       battle['boss'] == true))
                           ? () => controller.move(move.key)
                           : null,
-                      child: Text(move.value),
+                      label: Text(move.value),
                     ),
                 ],
               ),
@@ -647,7 +792,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
               ],
             ),
             if (state.active)
-              Text('${t('Expires', 'ផុតកំណត់')}: ${session['expiresAt']}'),
+              EncounterCountdown(expiresAt: string(session, 'expiresAt')),
           ],
         ),
       ),

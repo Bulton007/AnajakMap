@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../shared/formatting/travel_money.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
@@ -109,7 +111,37 @@ class ConnectedProfile extends ConsumerWidget {
       ),
       const SizedBox(height: 12),
       SelectableText(string(profile, 'email')),
-      SelectableText('${context.t('accountId')}: ${profile['id']}'),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${context.t('accountId')}: ${readableAccountId(string(profile, 'id'))}',
+            ),
+          ),
+          IconButton(
+            tooltip: context.isKhmer
+                ? 'ចម្លងលេខសម្គាល់គណនីពេញ'
+                : 'Copy full account ID',
+            onPressed: () async {
+              await Clipboard.setData(
+                ClipboardData(text: string(profile, 'id')),
+              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      context.isKhmer
+                          ? 'បានចម្លងលេខសម្គាល់គណនី'
+                          : 'Account ID copied',
+                    ),
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy_outlined),
+          ),
+        ],
+      ),
       const SizedBox(height: 20),
       const PreferencesControls(),
       Section(context.t('preferences')),

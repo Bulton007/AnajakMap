@@ -282,7 +282,26 @@ class CompanionAnswer extends StatelessWidget {
         children: [
           IconFact(Icons.auto_awesome, context.t('ai')),
           const Divider(height: 28),
-          SelectableText(string(data, 'translatedText', string(data, 'text'))),
+          if (data['possibleLandmarks'] is List) ...[
+            for (final candidate
+                in (data['possibleLandmarks'] as List).whereType<Map>())
+              IconFact(Icons.landscape_outlined, candidate['name'].toString()),
+            const SizedBox(height: 12),
+            SelectableText(string(data, 'explanation')),
+            if (string(data, 'extractedText').isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SelectableText(string(data, 'extractedText')),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              context.isKhmer
+                  ? 'ការសន្និដ្ឋានរបស់ AI · សូមផ្ទៀងផ្ទាត់អត្តសញ្ញាណទីតាំង។'
+                  : 'AI suggestions · verify the landmark independently. Confidence is not measured accuracy.',
+            ),
+          ] else
+            SelectableText(
+              string(data, 'translatedText', string(data, 'text')),
+            ),
           if (data['mock'] == true) ...[
             const SizedBox(height: 12),
             Text(context.t('mock')),

@@ -7,6 +7,7 @@ import '../authentication/auth_controller.dart';
 import 'adventure_controller.dart';
 import 'adventure_repository.dart';
 import 'rpg_screen.dart';
+import '../../shared/formatting/travel_dates.dart';
 
 /// A live view of the same account controller; no second cache or local rewards.
 class AdventureManagement extends ConsumerStatefulWidget {
@@ -219,59 +220,69 @@ class _AdventureManagementState extends ConsumerState<AdventureManagement> {
                     'ការទិញប្រើតែមាសហ្គេម។ សម្ភារៈរក្សាទុក និងប្រើប្រាស់តាមលទ្ធផលម៉ាស៊ីនមេ។',
                   ),
                 ),
-                for (final item in data.inventory)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            string(item, 'item') == 'potion'
-                                ? Icons.science_rounded
-                                : Icons.diamond_rounded,
-                            size: 48,
-                            color: Theme.of(context).colorScheme.primary,
+                const SizedBox(height: 16),
+                VisualActions(
+                  children: [
+                    for (final item in data.inventory)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                string(item, 'item') == 'potion'
+                                    ? Icons.science_rounded
+                                    : Icons.diamond_rounded,
+                                size: 48,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                '${string(item, 'item')} × ${integer(item, 'quantity')}',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              Text(
+                                string(item, 'item') == 'potion'
+                                    ? t(
+                                        'Restores up to 30 HP and clears poison.',
+                                        'ស្ដារ HP រហូតដល់ 30 និងបំបាត់ពុល។',
+                                      )
+                                    : t(
+                                        'One capture attempt. Weaken the wild creature first.',
+                                        'សាកល្បងចាប់មួយដង។ បន្ថយ HP សត្វជាមុន។',
+                                      ),
+                              ),
+                              FilledButton(
+                                onPressed: state.canAct && !state.active
+                                    ? () => controller.manage(
+                                        'inventory/purchase',
+                                        {
+                                          'item': string(item, 'item'),
+                                          'quantity': 1,
+                                        },
+                                      )
+                                    : null,
+                                child: Text(
+                                  '${t('Buy one', 'ទិញមួយ')} • ${string(item, 'item') == 'potion' ? 10 : 15} ${t('gold', 'មាស')}',
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            '${string(item, 'item')} × ${integer(item, 'quantity')}',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text(
-                            string(item, 'item') == 'potion'
-                                ? t(
-                                    'Restores up to 30 HP and clears poison.',
-                                    'ស្ដារ HP រហូតដល់ 30 និងបំបាត់ពុល។',
-                                  )
-                                : t(
-                                    'One capture attempt. Weaken the wild creature first.',
-                                    'សាកល្បងចាប់មួយដង។ បន្ថយ HP សត្វជាមុន។',
-                                  ),
-                          ),
-                          FilledButton(
-                            onPressed: state.canAct && !state.active
-                                ? () =>
-                                      controller.manage('inventory/purchase', {
-                                        'item': string(item, 'item'),
-                                        'quantity': 1,
-                                      })
-                                : null,
-                            child: Text(
-                              '${t('Buy one', 'ទិញមួយ')} • ${string(item, 'item') == 'potion' ? 10 : 15} ${t('gold', 'មាស')}',
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
+                  ],
+                ),
                 for (final row in objects(data.data['transactions']))
                   ListTile(
                     title: Text(
                       '${string(row, 'asset')} ${integer(row, 'delta') > 0 ? '+' : ''}${integer(row, 'delta')}',
                     ),
                     subtitle: Text(
-                      '${string(row, 'sourceId')}\n${string(row, 'createdAt')}',
+                      travelDateTime(
+                        string(row, 'createdAt'),
+                        locale: Localizations.localeOf(context).languageCode,
+                      ),
                     ),
                   ),
               ],

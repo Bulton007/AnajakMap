@@ -8,6 +8,7 @@ import '../../shared/components/remote.dart';
 import '../../shared/models/server_models.dart';
 import '../../shared/components/travel_panels.dart';
 import 'offline_trip_cards.dart';
+import '../../shared/components/travel_success.dart';
 
 class ConnectedOffline extends ConsumerStatefulWidget {
   const ConnectedOffline({super.key, required this.profile, this.trip});
@@ -36,6 +37,7 @@ class _OfflineState extends ConsumerState<ConnectedOffline> {
     });
     if (result == true && mounted) {
       setState(() => revision++);
+      showTravelSuccess(context);
     }
   }
 

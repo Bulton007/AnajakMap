@@ -25,6 +25,10 @@ public interface GuideProvider {
 
   Map<String, Object> perform(String operation, Map<String, Object> input);
 
+  default Map<String, Object> capabilities() {
+    return Map.of("vision", false, "voice", false);
+  }
+
   default List<Map<String,Object>> recommend(List<Map<String,Object>> places, List<String> interests, String language) {
     throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "AI recommendations are not configured");
   }

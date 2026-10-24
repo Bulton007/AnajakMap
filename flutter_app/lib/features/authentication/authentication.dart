@@ -16,7 +16,8 @@ class AuthenticationScreen extends ConsumerStatefulWidget {
   ConsumerState<AuthenticationScreen> createState() => _AuthenticationState();
 }
 
-class _AuthenticationState extends ConsumerState<AuthenticationScreen> {
+class _AuthenticationState extends ConsumerState<AuthenticationScreen>
+    with WidgetsBindingObserver {
   final email = TextEditingController(),
       password = TextEditingController(),
       name = TextEditingController(),
@@ -26,7 +27,21 @@ class _AuthenticationState extends ConsumerState<AuthenticationScreen> {
   bool consent = false;
   AuthLink? usedLink;
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(authConfigurationProvider);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final field in [email, password, name, code, confirmation]) {
       field.dispose();
     }
@@ -169,8 +184,24 @@ class _AuthenticationState extends ConsumerState<AuthenticationScreen> {
                     child: Text(context.a('authRetry')),
                   ),
                 ],
-                if (configuration.hasValue && !config.emailDelivery && !success)
+                if (configuration.hasValue &&
+                    !config.emailDelivery &&
+                    !success) ...[
                   AuthInlineFeedback(context.a('authUnavailable')),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
+                      onPressed: state.busy || configuration.isLoading
+                          ? null
+                          : () => ref.invalidate(authConfigurationProvider),
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: Text(context.a('authCheckAgain')),
+                    ),
+                  ),
+                ],
                 if (registering &&
                     config.policyVersion.startsWith('local-test-'))
                   AuthInlineFeedback(context.a('authLocalTest')),

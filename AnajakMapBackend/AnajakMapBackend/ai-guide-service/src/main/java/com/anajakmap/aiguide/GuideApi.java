@@ -47,7 +47,7 @@ public class GuideApi {
 
   public record Input(@NotNull @Size(max = 30) Map<String, Object> input) {}
 
-  public record Message(@NotBlank @Size(max = 8000) String text) {}
+  public record Message(@NotBlank @Size(max = 8000) String text, boolean useContext) {}
 
   @PostMapping("/itinerary-jobs")
   @ResponseStatus(HttpStatus.ACCEPTED)
@@ -157,6 +157,9 @@ public class GuideApi {
     return envelope.get("data");
   }
 
+  @GetMapping("/capabilities")
+  public Object capabilities() { return provider.capabilities(); }
+
   @PostMapping("/{operation:translation|vision|receipt|reservation|recap|voice}")
   public Object perform(
       @PathVariable String operation,
@@ -166,6 +169,13 @@ public class GuideApi {
         > (r.input.containsKey("documentBase64") ? 14 * 1024 * 1024 : 16000))
       throw new IllegalArgumentException();
     Map<String, Object> input = new HashMap<>(r.input);
+    if (operation.equals("vision")) {
+      if (!Boolean.TRUE.equals(provider.capabilities().get("vision")))
+        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Photo recognition is not configured");
+      if (!Boolean.TRUE.equals(input.get("shareWithProvider")))
+        throw new IllegalArgumentException("Photo sharing consent is required");
+      if (!input.containsKey("mediaId")) throw new IllegalArgumentException("Select an uploaded photo");
+    }
     if (input.containsKey("mediaId")) {
       var media =
           jdbc.queryForList(
@@ -205,7 +215,18 @@ public class GuideApi {
             id,
             jwt.getSubject())
         == 0) throw Api.denied();
-    Map reply = provider.perform("chat", Map.of("text", r.text));
+    Map<String, Object> input = new HashMap<>();
+    input.put("text", r.text);
+    // Default off for existing clients. Ownership is checked before any history read.
+    if (r.useContext) {
+      var history = jdbc.query(
+          "SELECT role,content FROM guide_messages WHERE conversation_id=? ORDER BY created_at DESC,"
+              + " CASE role WHEN 'ASSISTANT' THEN 1 ELSE 0 END DESC,id DESC FETCH FIRST 12 ROWS ONLY",
+          (rs, n) -> Map.of("role", rs.getString(1), "content", rs.getString(2)), id);
+      Collections.reverse(history);
+      input.put("history", ConversationContext.sanitize(history));
+    }
+    Map reply = provider.perform("chat", input);
     GuideResponseValidation.validate("chat", reply);
     return new org.springframework.transaction.support.TransactionTemplate(txManager)
         .execute(
