@@ -15,6 +15,9 @@ val releaseProperties = Properties().apply {
     if (config.exists()) config.inputStream().use { load(it) }
 }
 val releaseRequested = gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }
+// A separate debug identity lets USB tests coexist with a Play-signed install.
+val separatePreview = providers.gradleProperty("ANAJAK_PREVIEW").orNull == "true"
+require(!releaseRequested || !separatePreview) { "The separate test app is available only for debug builds." }
 if (releaseRequested) {
     require(listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
         !releaseProperties.getProperty(it).isNullOrBlank()
@@ -36,6 +39,7 @@ android {
 
     defaultConfig {
         applicationId = "com.anajak.anajak_travel"
+        manifestPlaceholders["APP_LABEL"] = "Anajak"
         manifestPlaceholders["MAPS_API_KEY"] = mapsProperties.getProperty("MAPS_API_KEY", "")
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -56,6 +60,13 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            if (separatePreview) {
+                applicationIdSuffix = ".preview"
+                versionNameSuffix = "-test"
+                manifestPlaceholders["APP_LABEL"] = "Anajak Test"
+            }
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
         }

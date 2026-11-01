@@ -169,12 +169,13 @@ public class GuideApi {
         > (r.input.containsKey("documentBase64") ? 14 * 1024 * 1024 : 16000))
       throw new IllegalArgumentException();
     Map<String, Object> input = new HashMap<>(r.input);
-    if (operation.equals("vision")) {
-      if (!Boolean.TRUE.equals(provider.capabilities().get("vision")))
-        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Photo recognition is not configured");
+    if (operation.equals("vision") || operation.equals("voice")) {
+      if (!Boolean.TRUE.equals(provider.capabilities().get(operation)))
+        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+            operation.equals("vision") ? "Photo recognition is not configured" : "Voice assistance is not configured");
       if (!Boolean.TRUE.equals(input.get("shareWithProvider")))
-        throw new IllegalArgumentException("Photo sharing consent is required");
-      if (!input.containsKey("mediaId")) throw new IllegalArgumentException("Select an uploaded photo");
+        throw new IllegalArgumentException("Media sharing consent is required");
+      if (!input.containsKey("mediaId")) throw new IllegalArgumentException("Select uploaded media");
     }
     if (input.containsKey("mediaId")) {
       var media =
@@ -184,7 +185,7 @@ public class GuideApi {
               jwt.getSubject());
       if (media.isEmpty()) throw Api.denied();
       input.put(
-          "imageBase64",
+          operation.equals("voice") ? "audioBase64" : "imageBase64",
           Base64.getEncoder()
               .encodeToString(storage.download(media.getFirst().get("OBJECT_KEY").toString())));
       input.put("mimeType", media.getFirst().get("MIME_TYPE"));
@@ -310,7 +311,11 @@ public class GuideApi {
         || !Set.of("image/jpeg", "image/png", "application/pdf", "audio/mpeg", "audio/wav")
             .contains(file.getContentType()))
       throw new IllegalArgumentException("Unsupported media or size");
-    String key = storage.upload(file.getBytes(), file.getContentType());
+    byte[] bytes = file.getBytes();
+    if (file.getContentType().equals("audio/wav")) VoiceAudio.validate(bytes, file.getContentType());
+    if (Set.of("image/jpeg", "image/png").contains(file.getContentType()) && bytes.length > 4 * 1024 * 1024)
+      throw new IllegalArgumentException("Select a JPEG or PNG up to 4 MiB");
+    String key = storage.upload(bytes, file.getContentType());
     return new org.springframework.transaction.support.TransactionTemplate(txManager)
         .execute(
             s -> {
@@ -336,13 +341,6 @@ public class GuideApi {
       @RequestHeader("Idempotency-Key") String key,
       @Valid @RequestBody Request r) {
     access.require(r.tripId, bearer, true);
-    Map weather =
-        HttpClients.client(discoveryUrl)
-            .get()
-            .uri("/api/v1/discovery/weather?tripId={id}", r.tripId)
-            .header("Authorization", bearer)
-            .retrieve()
-            .body(Map.class);
     Map calendar =
         HttpClients.client(tripUrl)
             .get()
@@ -351,7 +349,6 @@ public class GuideApi {
             .retrieve()
             .body(Map.class);
     Map<String, Object> preferences = new HashMap<>(r.preferences);
-    preferences.put("currentWeather", weather.get("data"));
     preferences.put("approvedCalendar", calendar.get("data"));
     preferences.put("requiresApproval", true);
     return generate(jwt, bearer, key, new Request(r.tripId, preferences));
@@ -390,7 +387,7 @@ public class GuideApi {
             .body(
                 Map.of(
                     "reason",
-                    "Replan from supplied delays, skipped stops, preferences and provider weather",
+                    "Replan from preferences while keeping calendar event times free; review all estimates",
                     "baseVersion",
                     original.get("version"),
                     "itinerary",

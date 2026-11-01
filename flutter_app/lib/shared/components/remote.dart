@@ -151,9 +151,122 @@ class _RemoteFormState extends State<_RemoteForm> {
     for (final f in widget.fields)
       f.key: TextEditingController(text: f.initial),
   };
+  final instantValues = <String, String>{};
+  final dateValues = <String, String>{};
+  bool formattedInstants = false;
   bool busy = false;
   Object? error;
   String operation = ApiClient.operationId(), lastPayload = '';
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (formattedInstants) return;
+    formattedInstants = true;
+    for (final field in widget.fields.where(
+      (f) => f.kind == InputKind.instant || f.kind == InputKind.date,
+    )) {
+      final raw = field.initial.trim();
+      if (field.kind == InputKind.date) {
+        final date = DateTime.tryParse(raw);
+        if (date != null && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw)) {
+          dateValues[field.key] = raw;
+          controllers[field.key]!.text = MaterialLocalizations.of(
+            context,
+          ).formatMediumDate(date);
+        }
+      } else if (raw.isNotEmpty &&
+          RegExp(r'(Z|[+-]\d\d:\d\d)$').hasMatch(raw)) {
+        instantValues[field.key] = raw;
+        controllers[field.key]!.text = _instantLabel(raw);
+      }
+    }
+  }
+
+  String _instantLabel(String value) {
+    final date = DateTime.tryParse(value)?.toLocal();
+    if (date == null) return value;
+    final material = MaterialLocalizations.of(context);
+    return '${material.formatMediumDate(date)} · ${material.formatTimeOfDay(TimeOfDay.fromDateTime(date))}';
+  }
+
+  String _withLocalOffset(DateTime value) {
+    final date = DateTime(
+      value.year,
+      value.month,
+      value.day,
+      value.hour,
+      value.minute,
+    );
+    final offset = date.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final minutes = offset.inMinutes.abs();
+    final iso = date.toIso8601String();
+    return '${iso.substring(0, 19)}$sign${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
+  }
+
+  Object _friendlyError(Object exception) {
+    if (widget.title == 'addEvent' &&
+        exception is ApiFailure &&
+        exception.status == 409) {
+      return context.isKhmer
+          ? 'ពេលវេលានេះប៉ះទង្គិចនឹងសកម្មភាព ឬព្រឹត្តិការណ៍ផ្សេង។ សូមជ្រើសម៉ោងផ្សេង។'
+          : 'This time overlaps another activity or event. Choose a different time.';
+    }
+    return exception;
+  }
+
+  Future<void> _pickInstant(InputSpec field) async {
+    final existing =
+        DateTime.tryParse(
+          instantValues[field.key] ?? field.initial,
+        )?.toLocal() ??
+        DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      initialDate: existing,
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(existing),
+    );
+    if (time == null || !mounted) return;
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    final raw = _withLocalOffset(selected);
+    setState(() {
+      instantValues[field.key] = raw;
+      controllers[field.key]!.text = _instantLabel(raw);
+    });
+  }
+
+  Future<void> _pickDate(InputSpec field) async {
+    final existing =
+        DateTime.tryParse(dateValues[field.key] ?? field.initial) ??
+        DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      initialDate: existing,
+    );
+    if (date == null || !mounted) return;
+    final raw = date.toIso8601String().substring(0, 10);
+    setState(() {
+      dateValues[field.key] = raw;
+      controllers[field.key]!.text = MaterialLocalizations.of(
+        context,
+      ).formatMediumDate(date);
+    });
+  }
+
   @override
   void dispose() {
     for (final c in controllers.values) {
@@ -181,17 +294,19 @@ class _RemoteFormState extends State<_RemoteForm> {
         }
         return number;
       case InputKind.date:
-        final date = DateTime.parse(v);
-        if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v) ||
-            date.toIso8601String().substring(0, 10) != v) {
+        final raw = dateValues[f.key] ?? v;
+        final date = DateTime.parse(raw);
+        if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw) ||
+            date.toIso8601String().substring(0, 10) != raw) {
           throw const FormatException();
         }
-        return v;
+        return raw;
       case InputKind.instant:
-        if (!RegExp(r'(Z|[+-]\d\d:\d\d)$').hasMatch(v)) {
+        final raw = instantValues[f.key] ?? v;
+        if (!RegExp(r'(Z|[+-]\d\d:\d\d)$').hasMatch(raw)) {
           throw FormatException(context.t('offsetHint'));
         }
-        return DateTime.parse(v).toUtc().toIso8601String();
+        return DateTime.parse(raw).toUtc().toIso8601String();
       case InputKind.email:
         if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v)) {
           throw const FormatException();
@@ -264,6 +379,14 @@ class _RemoteFormState extends State<_RemoteForm> {
                       : TextFormField(
                           controller: controllers[f.key],
                           enabled: !busy,
+                          readOnly:
+                              f.kind == InputKind.instant ||
+                              f.kind == InputKind.date,
+                          onTap: f.kind == InputKind.instant && !busy
+                              ? () => _pickInstant(f)
+                              : f.kind == InputKind.date && !busy
+                              ? () => _pickDate(f)
+                              : null,
                           obscureText: f.kind == InputKind.password,
                           maxLines: f.kind == InputKind.multiline ? 4 : 1,
                           keyboardType:
@@ -279,35 +402,27 @@ class _RemoteFormState extends State<_RemoteForm> {
                           decoration: InputDecoration(
                             labelText: context.t(f.label ?? f.key),
                             helperText: f.kind == InputKind.instant
-                                ? context.t('offsetHint')
+                                ? (context.isKhmer
+                                      ? 'ជ្រើសកាលបរិច្ឆេទ និងម៉ោង'
+                                      : 'Choose a date and time')
                                 : f.kind == InputKind.date
                                 ? 'YYYY-MM-DD'
                                 : null,
-                            suffixIcon: f.kind == InputKind.date
+                            suffixIcon: f.kind == InputKind.instant
+                                ? IconButton(
+                                    icon: const Icon(Icons.event_outlined),
+                                    tooltip: context.t('dates'),
+                                    onPressed: busy
+                                        ? null
+                                        : () => _pickInstant(f),
+                                  )
+                                : f.kind == InputKind.date
                                 ? IconButton(
                                     icon: const Icon(
                                       Icons.calendar_today_outlined,
                                     ),
                                     tooltip: context.t('dates'),
-                                    onPressed: busy
-                                        ? null
-                                        : () async {
-                                            final date = await showDatePicker(
-                                              context: context,
-                                              firstDate: DateTime(2000),
-                                              lastDate: DateTime(2100),
-                                              initialDate:
-                                                  DateTime.tryParse(
-                                                    controllers[f.key]!.text,
-                                                  ) ??
-                                                  DateTime.now(),
-                                            );
-                                            if (date != null) {
-                                              controllers[f.key]!.text = date
-                                                  .toIso8601String()
-                                                  .substring(0, 10);
-                                            }
-                                          },
+                                    onPressed: busy ? null : () => _pickDate(f),
                                   )
                                 : null,
                           ),
@@ -337,6 +452,25 @@ class _RemoteFormState extends State<_RemoteForm> {
                           if (!form.currentState!.validate()) {
                             return;
                           }
+                          for (final pair in [
+                            ('startsAt', 'endsAt'),
+                            ('departure', 'arrival'),
+                          ]) {
+                            final start = instantValues[pair.$1];
+                            final end = instantValues[pair.$2];
+                            if (start != null &&
+                                end != null &&
+                                !DateTime.parse(
+                                  end,
+                                ).isAfter(DateTime.parse(start))) {
+                              setState(
+                                () => error = context.isKhmer
+                                    ? 'ពេលបញ្ចប់ត្រូវតែក្រោយពេលចាប់ផ្តើម។'
+                                    : 'Choose an end time after the start time.',
+                              );
+                              return;
+                            }
+                          }
                           final values = <String, dynamic>{
                             for (final f in widget.fields)
                               f.key: parse(f, controllers[f.key]!.text.trim()),
@@ -361,7 +495,7 @@ class _RemoteFormState extends State<_RemoteForm> {
                           } catch (e) {
                             if (mounted) {
                               setState(() {
-                                error = e;
+                                error = _friendlyError(e);
                                 busy = false;
                               });
                             }

@@ -235,8 +235,9 @@ were preserved, and no real services were changed by these checks. Added
 
 ## Highest-priority next task
 
-Run a Samsung end-to-end acceptance pass against the restored backend using the
-current `connected.public.local.json`, beginning with login and AI chat. Configure
-the optional real router and confirm image model support before enabling those
-features. Stable hosting, destination-specific culture data, native push, iOS,
+The 24 October Samsung pass reproduced and fixed the missing routing provider,
+city search/photo matching, and AI workflow failures. See `DEVICE_TEST_REPORT.md`
+for actual phone checks, live API outcomes and their limits. The temporary public
+tunnel expired, so this device build uses USB forwarding to the local Nginx API.
+Stable hosting, destination-specific culture data, native push, iOS,
 privacy/retention and operations checks remain production dependencies.

@@ -269,6 +269,11 @@ class GenerationStatusPanel extends StatelessWidget {
   }
 }
 
+bool isDemoGuideAnswer(Json data) =>
+    data['mock'] == true ||
+    string(data, 'source').toLowerCase().contains('development fixture') ||
+    string(data, 'text').startsWith('Development travel guide:');
+
 class CompanionAnswer extends StatelessWidget {
   const CompanionAnswer({super.key, required this.data});
   final Json data;
@@ -280,7 +285,16 @@ class CompanionAnswer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconFact(Icons.auto_awesome, context.t('ai')),
+          IconFact(
+            isDemoGuideAnswer(data)
+                ? Icons.science_outlined
+                : Icons.auto_awesome,
+            isDemoGuideAnswer(data)
+                ? (context.isKhmer
+                      ? 'ចម្លើយគំរូ · មិនមែន AI ផ្ទាល់'
+                      : 'Demo answer · not live AI')
+                : context.t('ai'),
+          ),
           const Divider(height: 28),
           if (data['possibleLandmarks'] is List) ...[
             for (final candidate
@@ -302,10 +316,6 @@ class CompanionAnswer extends StatelessWidget {
             SelectableText(
               string(data, 'translatedText', string(data, 'text')),
             ),
-          if (data['mock'] == true) ...[
-            const SizedBox(height: 12),
-            Text(context.t('mock')),
-          ],
           if (string(data, 'source').isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(

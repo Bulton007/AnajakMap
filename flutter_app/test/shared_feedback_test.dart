@@ -114,7 +114,10 @@ void main() {
     );
     await tester.pump();
     expect(find.text('Retry photo'), findsOneWidget);
-    expect(find.text('Artist · CC BY-SA'), findsOneWidget);
+    expect(find.textContaining('Artist'), findsNothing);
+    await tester.tap(find.byTooltip('Photo credit: Kep'));
+    await tester.pumpAndSettle();
+    expect(find.text('Artist\nCC BY-SA'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

@@ -12,7 +12,7 @@ class PlacePhotoCache {
           receiveTimeout: const Duration(seconds: 10),
           followRedirects: false,
           headers: {
-            'User-Agent': 'AnajakMap/1.0 (contact: forusea168@gmail.com)',
+            'User-Agent': 'AnajakMap/1.0 (https://github.com/Bulton007/AnajakMap)',
           },
         ),
       );
@@ -37,7 +37,10 @@ class PlacePhotoCache {
     final uri = Uri.tryParse(url);
     if (uri == null ||
         uri.scheme != 'https' ||
-        uri.host != 'upload.wikimedia.org' ||
+        !const {
+          'upload.wikimedia.org',
+          'thumb.wikimedia.org',
+        }.contains(uri.host) ||
         uri.userInfo.isNotEmpty) {
       return null;
     }

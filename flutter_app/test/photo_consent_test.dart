@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anajak_travel/features/connected/connected_tools.dart';
 import 'package:anajak_travel/app/localization/strings.dart';
+import 'package:anajak_travel/core/network/providers.dart';
 
 void main() {
   testWidgets(
@@ -12,6 +13,11 @@ void main() {
       await tester.runAsync(() => Strings.delegate.load(const Locale('en')));
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            guideCapabilitiesProvider.overrideWith(
+              (ref) async => {'vision': true, 'configured': true},
+            ),
+          ],
           child: MaterialApp(
             localizationsDelegates: [
               Strings.delegate,
@@ -21,6 +27,7 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
       final choose = find.byType(FilledButton).first;
       await tester.ensureVisible(choose);
       await tester.tap(choose);

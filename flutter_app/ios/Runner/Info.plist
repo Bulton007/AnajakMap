@@ -10,6 +10,8 @@
     <string>Take a photo to review a receipt, reservation, place, or journal entry before uploading.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Select a travel photo or document to upload.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Record a short travel question. Audio is sent to our backend and Google Gemini only after you choose Send and agree to share it.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Share your current location with accepted trip members for five minutes when you choose.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

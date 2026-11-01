@@ -81,6 +81,21 @@ void main() {
       expect(AuthValidation.code('12345a'), isNotNull);
     },
   );
+  test('ngrok free API URLs bypass the browser warning page', () {
+    final ngrok = ApiClient(
+      'https://reaction-parched-grip.ngrok-free.dev/api/v1/',
+      MemoryCredentials(),
+    );
+    final regularHost = ApiClient(
+      'https://travel.example/api/v1/',
+      MemoryCredentials(),
+    );
+    expect(ngrok.dio.options.headers['ngrok-skip-browser-warning'], '1');
+    expect(
+      regularHost.dio.options.headers.containsKey('ngrok-skip-browser-warning'),
+      isFalse,
+    );
+  });
   test('guards preserve safe destination and restrict guests', () {
     const guest = AuthState(phase: AuthPhase.guest);
     expect(authRedirect(guest, Uri.parse('/guest')), isNull);

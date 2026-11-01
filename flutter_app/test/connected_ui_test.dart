@@ -73,7 +73,12 @@ void main() {
         if (r.path == 'trips/trip/calendar') {
           return response({'activities': []});
         }
-        if (r.path == 'discovery/places' || r.path == 'reservations') {
+        if (r.path == 'reservations') {
+          return response({
+            'message': 'Reservations are temporarily unavailable',
+          }, status: 503);
+        }
+        if (r.path == 'discovery/places') {
           return response([]);
         }
         if (r.path == 'guide/itinerary-jobs') {

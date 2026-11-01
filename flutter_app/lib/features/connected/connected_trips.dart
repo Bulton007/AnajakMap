@@ -13,6 +13,8 @@ import 'connected_generation.dart';
 import 'connected_tools.dart';
 import 'connected_offline.dart';
 import 'connected_map.dart';
+import 'itinerary_activity_card.dart';
+import '../../shared/components/travel_panels.dart';
 
 class ConnectedTrips extends ConsumerStatefulWidget {
   const ConnectedTrips({super.key, required this.profile, this.home = false});
@@ -276,12 +278,12 @@ class ConnectedTripDetail extends ConsumerWidget {
         ).map(ServerActivity.fromJson).toList();
         return PageBody(
           children: [
-            Text(trip.title, style: Theme.of(context).textTheme.headlineLarge),
-            const SizedBox(height: 8),
-            Text(
-              '${trip.destination} · ${travelDateRange(trip.startDate, trip.endDate, locale: context.isKhmer ? 'km' : 'en')}',
+            TravelHero(
+              title: trip.title,
+              subtitle:
+                  '${trip.destination} · ${travelDateRange(trip.startDate, trip.endDate, locale: context.isKhmer ? 'km' : 'en')}',
+              icon: Icons.route_rounded,
             ),
-            Text(trip.timezone),
             const SizedBox(height: 18),
             Wrap(
               spacing: 8,
@@ -316,6 +318,7 @@ class ConnectedTripDetail extends ConsumerWidget {
                   ),
                 ),
                 ActionChip(
+                  avatar: const Icon(Icons.map_rounded, size: 20),
                   label: Text(context.t('map')),
                   onPressed: () =>
                       openScreen(context, ConnectedMap(trip: trip)),
@@ -327,24 +330,21 @@ class ConnectedTripDetail extends ConsumerWidget {
               action: context.t('refresh'),
               onAction: refresh,
             ),
-            if (activities.isEmpty) Text(context.t('empty')),
-            for (final a in activities)
-              Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(16),
-                  leading: const Icon(Icons.schedule_rounded),
-                  title: Text(a.title),
-                  subtitle: Text(
-                    '${travelTimeRange(a.startsAt, a.endsAt, zone: trip.timezone, locale: context.isKhmer ? 'km' : 'en')}\n${a.source}',
-                  ),
-                  trailing: IconButton(
-                    tooltip: context.t('confirm'),
-                    icon: const Icon(Icons.thumb_up_outlined),
-                    onPressed: () => runRequest(
-                      context,
-                      () => ref.read(repositoryProvider).vote(trip.id, a.id, 1),
-                    ),
+            if (activities.isEmpty)
+              VisualEmpty(icon: Icons.route_rounded, title: context.t('empty')),
+            for (var i = 0; i < activities.length; i++)
+              ItineraryActivityCard(
+                activity: activities[i],
+                zone: trip.timezone,
+                order: i,
+                action: IconButton(
+                  tooltip: context.t('confirm'),
+                  icon: const Icon(Icons.thumb_up_outlined),
+                  onPressed: () => runRequest(
+                    context,
+                    () => ref
+                        .read(repositoryProvider)
+                        .vote(trip.id, activities[i].id, 1),
                   ),
                 ),
               ),
@@ -365,18 +365,20 @@ class ConnectedTripDetail extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 14),
-            OutlinedButton(
+            OutlinedButton.icon(
               onPressed: () =>
                   editConnectedTrip(context, ref, trip).then((_) => refresh()),
-              child: Text(context.t('editTrip')),
+              icon: const Icon(Icons.edit_outlined),
+              label: Text(context.t('editTrip')),
             ),
             const SizedBox(height: 14),
-            OutlinedButton(
+            OutlinedButton.icon(
               onPressed: () => openScreen(
                 context,
                 ConnectedDrafts(trip: trip, profile: profile),
               ),
-              child: Text(context.t('drafts')),
+              icon: const Icon(Icons.drafts_outlined),
+              label: Text(context.t('drafts')),
             ),
           ],
         );

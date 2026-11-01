@@ -104,18 +104,78 @@ This refreshes development configuration, not an already installed Play build.
 | --- | --- | --- |
 | `APP_KHR_PER_USD` | `4000` | Fixed app conversion, not a live exchange quote |
 | `WEATHER_PROVIDER` | `open-meteo` in local testing | Destination coordinate weather; review commercial service terms before production |
-| `OSRM_URL` | empty | Your compatible routing service base URL; unconfigured routing is unavailable |
+| `OSRM_URL` | empty | Your compatible routing service base URL; required for production routing |
+| `OSRM_DEMO_ENABLED` | `true` in local dev/test | Opt-in public OSRM test routing when `OSRM_URL` is empty, limited to one request per second; not production hosting |
 | `RPG_ENCOUNTER_TTL_SECONDS` | `900` | Server encounter duration, allowed 60–3600 seconds |
 | `GEMINI_VISION_ENABLED` | `false` | Set true only after your selected model is verified for image input and structured output |
+| `GEMINI_VOICE_ENABLED` | `false` | Set true only after your selected model is verified for audio input and structured transcript/text output |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | existing configuration | Server-only Google credentials/model; no secrets in mobile config |
+| `RPG_SIMULATION_ENABLED` | `false` in the laptop overlay | Explicit account practice in dev/test profiles only; separate from field progress |
 
 Photo recognition uploads only after the user agrees and selects JPEG/PNG up to
 4 MiB. The photo passes through the existing private media storage and Google
 Gemini. Embedded metadata may be included. Review your published privacy policy
 and private-media retention before enabling it. Results are uncertain suggestions,
-not verified identification. No photo was sent to Google during automated tests.
-Voice AI remains unavailable. Push notifications require a real native push
+not verified identification. The 24 October provider checks used only a synthetic
+PNG and synthesized fictional audio, not a user's photograph or recording.
+
+Voice assistance now records locally through the native microphone permission.
+After stopping, the user must agree to send the recording to the backend and
+Google Gemini, then press **Send recording**. Recording never uploads on its own;
+leaving the foreground cancels it. The private temporary recording is deleted
+after reading/cancellation; the upload follows existing backend private-media
+retention. Supported input is PCM16 WAV, 0.25–60 seconds and at most 4 MiB, with
+8–48 kHz sample rate and one or two channels. The app records 16 kHz mono. Voice
+returns a transcript and text answer; it does not synthesize spoken replies.
+User denial, silence, unavailable configuration, quotas and upload failures are
+reported honestly, with retry timing where supplied by the backend.
+
+Both media flags remain false in source defaults. This PC's ignored `.env` has
+them enabled after successful probes with `gemini-3.5-flash-lite`. On the hosting
+PC, verify its configured model, explicitly set the required flags in its
+existing `.env`, and run the updater to recreate `ai-guide-service`. An installed
+older app also needs the Flutter update to expose native voice recording. The
+backend does not accept a client flag as proof of media ownership or consent.
+
+Push notifications require a real native push
 project and device-token integration; simulated delivery is labelled.
+
+Local routing can use a selected place as the origin without requesting GPS.
+The public demo returns real road geometry with an explicit demo label and no
+live traffic. See [ROUTING_SETUP.md](ROUTING_SETUP.md) for provider restrictions.
+Exact city searches also include geographically verified Wikipedia sights with
+licensed Wikimedia photos where available; places without a licensed photo
+keep the missing-photo state. Photo loading permits Wikimedia's current
+`thumb.wikimedia.org` host as well as `upload.wikimedia.org`.
+
+Gemini replanning fits proposed stops around calendar event times inside the
+backend. Calendar event data and weather are not sent to the model by this
+operation. Receipt/booking extraction remains unavailable with the Gemini
+adapter; manual entry is available. Provider timeouts and quotas can still
+interrupt supported AI operations.
+
+The 24 October device test found repeated upstream 503 responses with the local
+`gemini-3.8-flash` selection. Google-listed `gemini-3.5-flash-lite` passed all six
+bounded text workflows, so the tested local `.env` now uses
+`GEMINI_MODEL=gemini-3.5-flash-lite`. For a separate hosting PC, change only that
+setting if the same failure occurs, then recreate `ai-guide-service` using your
+existing Compose overlays. Source updates retain the hosting PC's `.env`; they
+do not copy this local model choice or replace its key. Availability and quotas
+remain provider-dependent.
+
+The Adventure entry offers **Play practice** when the server capability is
+enabled, selecting an unlocked trail and starter companion before explicit
+acknowledgement. The laptop overlay reads `RPG_SIMULATION_ENABLED` from the
+existing `.env` and defaults false; server practice additionally requires a
+dev/test Spring profile. Set it true only for test hosting and recreate
+`discovery-service` with the existing Compose overlays. This does not approve
+unreviewed destinations, bypass GPS checks, merge practice into field progress,
+or enable redeemable rewards. If account practice is disabled, **Play on this
+device** remains a clearly separate local practice option.
+
+Explore retains mandatory photo attribution behind a compact info button over
+each licensed photo. Tapping it opens the author/licence/source details; the
+large visible reference row has been removed.
 
 Flutter foreground encounter controls: `--dart-define=RPG_ENCOUNTER_PERCENT=25`
 and `--dart-define=RPG_ENCOUNTER_COOLDOWN_SECONDS=300`. Checks occur once a minute

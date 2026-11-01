@@ -1,17 +1,39 @@
 # Active map provider: OpenStreetMap
 
-All app map routes now use Flutter Map with OpenStreetMap standard tiles. No map
-API key, account, or billing setup is needed. Google Maps code is dormant and its
-local key is not used by these routes. AI remains independent and unchanged.
+App maps use Flutter Map with OpenStreetMap standard tiles by default. The map
+layer picker also offers terrain and cycling tile styles. These styles need no
+API key or billing account. Google Maps code remains dormant; the picker does
+not enable Google Maps services.
+
+The Layers button opens a tray of illustrated style previews. Changing the base
+map keeps the camera, selected pins and any confirmed road route. **Biking is a
+map style, not bicycle routing**: the configured route engine still provides
+driving directions. Live traffic and transit feeds are not configured and are
+shown as unavailable rather than drawing simulated overlays.
+
+| Style | Tile service | Credits | Native tile zoom |
+| --- | --- | --- | --- |
+| Map | Existing `MAP_TILE_URL` override or OpenStreetMap standard | Existing override or © OpenStreetMap contributors | 19 |
+| Terrain | OpenTopoMap | © OpenStreetMap contributors · SRTM · © OpenTopoMap (CC-BY-SA) | 17 |
+| Biking | CyclOSM, hosted by OpenStreetMap France | © CyclOSM · © OpenStreetMap contributors | 19 |
+
+Provider sources: [OpenTopoMap](https://github.com/der-stefan/OpenTopoMap),
+[CyclOSM tile service](https://github.com/cyclosm/cyclosm-cartocss-style/blob/master/README.md).
+OpenTopoMap documents that its raster tiles are deprecated while it moves toward
+vector tiles. All public services remain external dependencies; production scale
+may require a maintained tile host. Layer definitions can be supplied separately
+from their selector UI to support a future provider change.
 
 - HTTPS tiles: https://tile.openstreetmap.org/{z}/{x}/{y}.png
-- Visible, linked OpenStreetMap attribution below the map.
+- Visible, linked attribution on the map, updated for the selected style.
 - Identifying native User-Agent with app name and public support contact.
 - Flutter Map 8.3.2 default built-in HTTP-aware caching on native platforms;
   normal browser caching on web. No cache bypass, bulk download, or offline packs.
-- No background prefetch; pan buffer zero. Maximum tile zoom 19.
+- No bulk or offline tile download; pan buffer zero. Tile zoom follows the style.
 - Valid backend coordinates become markers; tapping retains the detail sheet.
-- No GPS permission or location upload. No directions engine or real monster spawns.
+- Foreground location is requested only after the map's location explanation.
+  Directions send the selected origin/destination to the backend and configured
+  routing service. Map style changes do not make a new directions request.
 - Public tiles are best effort, not unlimited hosting or a guaranteed SLA.
 
 Policy: https://operations.osmfoundation.org/policies/tiles/

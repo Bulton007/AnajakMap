@@ -34,9 +34,8 @@ public final class GuideResponseValidation {
       }
       case "reservation" -> text(result, "provider");
       case "voice" -> {
-        if (!(result.get("transcript") instanceof String)
-            && !(result.get("audioBase64") instanceof String))
-          throw new IllegalArgumentException("Missing voice output");
+        text(result, "transcript");
+        text(result, "text");
       }
       default -> throw new IllegalArgumentException("Unknown operation");
     }

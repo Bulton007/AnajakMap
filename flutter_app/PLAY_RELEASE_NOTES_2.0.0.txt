@@ -1,0 +1,4 @@
+<en-GB>
+Version 2 brings distinct Khmer-inspired fantasy companions, clearer game cards and progress indicators, and improved spacing across game screens.
+Get driving directions from your current location, with clearer route errors and more reliable location refresh.
+</en-GB>

@@ -91,6 +91,7 @@ public class JobWorker {
   record FailurePlan(boolean retry, String code, long delaySeconds) {}
 
   static FailurePlan failurePlan(Exception error, int attempt) {
+    if (error instanceof InvalidGuideResponseException) return new FailurePlan(false, "INVALID_AI_RESPONSE", 0);
     if (error instanceof IllegalArgumentException) return new FailurePlan(false, "INVALID_AI_RESPONSE", 0);
     if (error instanceof ResponseStatusException response && response.getStatusCode().value() == 429) {
       long delay = 0;

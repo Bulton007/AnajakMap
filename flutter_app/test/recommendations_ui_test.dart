@@ -36,6 +36,31 @@ const matched = {
   'retrievedAt': '2026-10-21T16:00:00Z',
 };
 void main() {
+  test(
+    'recommendation references accept verified page IDs and reject redirects',
+    () {
+      for (final url in [
+        'https://www.openstreetmap.org/way/456',
+        'https://www.openstreetmap.org/node/123',
+        'https://en.wikipedia.org/?curid=1001',
+      ]) {
+        expect(recommendationReferenceUri(url)?.toString(), url);
+      }
+      for (final url in [
+        'http://en.wikipedia.org/?curid=1001',
+        'https://en.wikipedia.org.evil.test/?curid=1001',
+        'https://evil.test/?curid=1001',
+        'https://user:password@en.wikipedia.org/?curid=1001',
+        'https://en.wikipedia.org:8443/?curid=1001',
+        'https://en.wikipedia.org/?curid=1001&redirect=https://evil.test',
+        'https://en.wikipedia.org/?curid=1001&curid=1002',
+        'https://en.wikipedia.org/?curid=-1',
+        'https://www.openstreetmap.org/user/login?return=https://evil.test',
+      ]) {
+        expect(recommendationReferenceUri(url), isNull, reason: url);
+      }
+    },
+  );
   setUpAll(() async {
     await initializeDateFormatting('en');
     await initializeDateFormatting('km');
@@ -106,7 +131,7 @@ void main() {
       await tester.ensureVisible(find.text('Find places for me'));
       await tester.tap(find.text('Find places for me'));
       await tester.pumpAndSettle();
-      expect(requests.single['useAi'], false);
+      expect(requests.single['useAi'], true);
       expect(requests.single['interests'], ['culture']);
       expect(find.text('Temple visit'), findsOneWidget);
       expect(find.textContaining('not AI-generated'), findsOneWidget);
@@ -165,9 +190,6 @@ void main() {
     await tester.ensureVisible(find.text('Find places for me'));
     await tester.tap(find.text('Find places for me'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Ask AI to choose & explain'));
-    await tester.tap(find.text('Ask AI to choose & explain'));
-    await tester.pumpAndSettle();
     expect(find.text('Temple visit'), findsOneWidget);
     expect(
       find.textContaining('Your place matches still work'),
@@ -177,6 +199,25 @@ void main() {
       find.widgetWithText(TextButton, 'Ask AI to choose & explain'),
     );
     expect(button.onPressed, isNull);
+  });
+  testWidgets('manual matching remains an explicit alternative to AI', (
+    tester,
+  ) async {
+    final requests = <Json>[];
+    await show(tester, (request) async {
+      if (request.path == 'guide/recommendations') {
+        requests.add(object(request.data));
+        return response(matched);
+      }
+      return response({});
+    });
+    await tester.ensureVisible(find.byType(SwitchListTile));
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.ensureVisible(find.text('Find places for me'));
+    await tester.tap(find.text('Find places for me'));
+    await tester.pumpAndSettle();
+    expect(requests.single['useAi'], false);
+    expect(find.textContaining('not AI-generated'), findsOneWidget);
   });
   testWidgets('Khmer recommendation form handles 200 percent text', (
     tester,

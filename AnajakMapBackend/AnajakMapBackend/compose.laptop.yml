@@ -15,7 +15,8 @@ services:
   discovery-service:
     <<: *persistent
     environment:
-      RPG_SIMULATION_ENABLED: "false"
+      # Explicit test-account practice; the service also requires dev/test profile.
+      RPG_SIMULATION_ENABLED: ${RPG_SIMULATION_ENABLED:-false}
   expense-service: {<<: *persistent}
   reservation-service: {<<: *persistent}
   journal-service: {<<: *persistent}

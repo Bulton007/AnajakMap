@@ -70,12 +70,16 @@ function Install-BackendUpdateSources {
     $prefix = 'AnajakMapBackend/AnajakMapBackend/'
     foreach ($entry in $files) {
         if ($entry -ne $entry.Trim() -or $entry.Contains('\') -or [IO.Path]::IsPathRooted($entry) -or $entry -match '(^|/)\.{1,2}(/|$)') { throw "Unsafe update manifest path: $entry" }
-        $allowed = $entry -in @('Update App Backend.cmd', 'APP_UPDATE_SETUP.md', 'APP_AUDIT.md', 'backend-update-files.txt')
+        $allowed = $entry -in @('Update App Backend.cmd', 'Update AI.cmd', 'APP_UPDATE_SETUP.md', 'APP_AUDIT.md',
+            'ROUTING_SETUP.md', 'DEVICE_TEST_REPORT.md', 'backend-update-files.txt',
+            'HOME_SERVER_URL_SETUP.md', 'Configure Ngrok.cmd', 'Start Public Backend.cmd',
+            'Recover Backend Config.cmd', 'RECOVER_BACKEND_CONFIG.md', 'Check AI.cmd', 'AI_DIAGNOSTICS.md', 'AI_SETUP_REPAIR.md')
         if ($entry.StartsWith($prefix, [StringComparison]::Ordinal)) {
             $relative = $entry.Substring($prefix.Length)
             $allowed = $relative -match '^[a-z-]+/src/(main|test)/java/[A-Za-z0-9_/]+\.java$' -or
                 $relative -match '^scripts/[a-z0-9-]+\.ps1$' -or
-                $relative -in @('compose.local.yml', 'deploy/laptop/README.md')
+                $relative -in @('compose.local.yml', 'compose.laptop.yml', '.env.example', 'deploy/laptop/README.md',
+                    'trip-service/src/main/resources/db/migration/V4__unicode_trip_text.sql')
         }
         if (!$allowed -or $seen -contains $entry) { throw "Unapproved or duplicate backend update file: $entry" }
         $seen += $entry

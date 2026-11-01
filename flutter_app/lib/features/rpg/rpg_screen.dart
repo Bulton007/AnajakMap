@@ -1,9 +1,10 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'rpg_controller.dart';
 import 'rpg_game.dart';
+import 'creature_catalog.dart';
+import 'creature_portrait_painter.dart';
 
 String rpgText(BuildContext context, String en, String km) =>
     Localizations.localeOf(context).languageCode == 'km' ? km : en;
@@ -49,7 +50,7 @@ class RpgScreen extends ConsumerWidget {
             icon: const Icon(Icons.cloud_outlined),
           ),
           IconButton(
-            tooltip: 'OpenStreetMap',
+            tooltip: t('Map', 'ផែនទី'),
             onPressed: () => context.push('/map'),
             icon: const Icon(Icons.map_outlined),
           ),
@@ -167,7 +168,12 @@ class RpgScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            c.name,
+                            creatureDisplayName(
+                              c.id,
+                              language: Localizations.localeOf(
+                                context,
+                              ).languageCode,
+                            ),
                             style: Theme.of(context).textTheme.headlineMedium,
                           ),
                           Text(
@@ -175,7 +181,8 @@ class RpgScreen extends ConsumerWidget {
                           ),
                           CreaturePortrait(creature: c),
                           _Health(
-                            label: '${c.name} HP',
+                            label:
+                                '${creatureDisplayName(c.id, language: Localizations.localeOf(context).languageCode)} HP',
                             value: game.enemyHp,
                             max: c.health,
                           ),
@@ -277,12 +284,19 @@ class RpgScreen extends ConsumerWidget {
                   Card(
                     child: ListTile(
                       minVerticalPadding: 12,
-                      leading: Icon(
-                        game.progress.collection.containsKey(creature.id)
-                            ? Icons.pets
-                            : Icons.lock_outline,
+                      leading: SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: CreaturePortrait(creature: creature),
                       ),
-                      title: Text(creature.name),
+                      title: Text(
+                        creatureDisplayName(
+                          creature.id,
+                          language: Localizations.localeOf(
+                            context,
+                          ).languageCode,
+                        ),
+                      ),
                       subtitle: Text(
                         '${_grade(context, creature.grade)} · ${creature.biome == Biome.temple ? t('Temple', 'ប្រាសាទ') : t('Beach', 'ឆ្នេរ')}',
                       ),
@@ -293,9 +307,8 @@ class RpgScreen extends ConsumerWidget {
                   ),
                 const SizedBox(height: 16),
                 Text(
-                  t(
-                    'Original 2D concept art for this prototype. Animated 3D creatures and verified location rewards are planned separately.',
-                    'រូបភាពគំនិត 2D សម្រាប់ការសាកល្បង។ សត្វ 3D មានចលនា និងរង្វាន់ទីតាំងពិតនឹងអភិវឌ្ឍបន្ថែម។',
+                  creatureInspirationNotice(
+                    language: Localizations.localeOf(context).languageCode,
                   ),
                 ),
               ],
@@ -389,129 +402,21 @@ String _message(BuildContext c, RpgGame game) {
   };
 }
 
-/// Original vector concept art, deliberately labelled 2D rather than AR/3D.
+/// Original folklore-inspired vector art; not a historical reconstruction.
 class CreaturePortrait extends StatelessWidget {
   const CreaturePortrait({super.key, required this.creature});
   final Creature creature;
   @override
   Widget build(BuildContext context) => Semantics(
     image: true,
-    label: creature.name,
+    label: creatureDisplayName(
+      creature.id,
+      language: Localizations.localeOf(context).languageCode,
+    ),
     child: SizedBox(
       height: 230,
       width: double.infinity,
-      child: CustomPaint(painter: _CreaturePainter(creature)),
+      child: CustomPaint(painter: KhmerCreaturePainter(creature)),
     ),
   );
-}
-
-class _CreaturePainter extends CustomPainter {
-  _CreaturePainter(this.creature);
-  final Creature creature;
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    final scale = math.min(size.width / 280, size.height / 230);
-    canvas.scale(scale);
-    final color = HSLColor.fromAHSL(
-      1,
-      creature.hue.toDouble(),
-      .55,
-      .58,
-    ).toColor();
-    final paint = Paint();
-    canvas.drawCircle(
-      Offset.zero,
-      95,
-      paint..color = color.withValues(alpha: .12),
-    );
-    canvas.drawOval(
-      const Rect.fromLTWH(-68, 80, 136, 15),
-      paint..color = Colors.black.withValues(alpha: .12),
-    );
-    for (var i = 0; i < 8; i++) {
-      final a = i * math.pi / 4;
-      canvas.drawCircle(
-        Offset(math.cos(a) * 100, math.sin(a) * 90),
-        2 + i % 3.0,
-        paint..color = const Color(0xffc69b48),
-      );
-    }
-    final sea = creature.biome == Biome.beach;
-    for (final side in [-1.0, 1.0]) {
-      final fin = Path()
-        ..moveTo(side * 40, -20)
-        ..quadraticBezierTo(side * 110, sea ? -70 : -90, side * 70, 32)
-        ..lineTo(side * 32, 30)
-        ..close();
-      canvas.drawPath(fin, paint..color = color);
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(side * 38, 72), width: 40, height: 25),
-        paint,
-      );
-    }
-    final body = const Rect.fromLTWH(-63, -60, 126, 140);
-    paint.shader = RadialGradient(
-      colors: [
-        Color.lerp(color, Colors.white, .55)!,
-        color,
-        Color.lerp(color, const Color(0xff0c2926), .55)!,
-      ],
-      center: const Alignment(-.4, -.6),
-      radius: 1.2,
-    ).createShader(body);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(body, Radius.circular(sea ? 65 : 40)),
-      paint,
-    );
-    paint.shader = null;
-    for (final side in [-1.0, 1.0]) {
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(side * 24, -12), width: 20, height: 26),
-        paint..color = const Color(0xff0c2926),
-      );
-      canvas.drawCircle(
-        Offset(side * 24 - 3, -17),
-        4,
-        paint..color = Colors.white,
-      );
-      canvas.drawOval(
-        Rect.fromCenter(center: Offset(side * 36, 10), width: 17, height: 8),
-        paint..color = const Color(0xffefb1a7),
-      );
-    }
-    canvas.drawArc(
-      const Rect.fromLTWH(-10, 10, 20, 14),
-      0,
-      math.pi,
-      false,
-      Paint()
-        ..color = const Color(0xff0c2926)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
-    );
-    final crown = Path()
-      ..moveTo(-25, -53)
-      ..lineTo(-32, -85)
-      ..lineTo(-8, -71)
-      ..lineTo(0, -99)
-      ..lineTo(12, -72)
-      ..lineTo(32, -85)
-      ..lineTo(24, -53)
-      ..close();
-    canvas.drawPath(crown, paint..color = const Color(0xfff8db9b));
-    for (var i = 0; i <= creature.grade.index; i++) {
-      canvas.drawCircle(
-        Offset((i - creature.grade.index / 2) * 18, 47),
-        5,
-        paint..color = const Color(0xfff8db9b),
-      );
-    }
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_CreaturePainter oldDelegate) =>
-      oldDelegate.creature != creature;
 }

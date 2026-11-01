@@ -1,4 +1,6 @@
 import 'creature_avatar.dart';
+import 'creature_catalog.dart';
+import 'rpg_layout.dart';
 import 'dart:async';
 import 'encounter_policy.dart';
 import '../../shared/components/visual.dart';
@@ -32,6 +34,8 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
   bool boss = false;
   bool discover = false, awaitingFight = false;
   Timer? discoveryTimer;
+  final _battleAnchor = GlobalKey();
+  String? _presentedBattle;
   final encounters = EncounterPolicy(
     probability:
         const int.fromEnvironment('RPG_ENCOUNTER_PERCENT', defaultValue: 25) /
@@ -44,6 +48,16 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     ),
   );
   String t(String en, String km) => rpgText(context, en, km);
+  String creatureName(String id) => creatureDisplayName(
+    id,
+    language: Localizations.localeOf(context).languageCode,
+  );
+  String creatureRarity(String value) => switch (value.toLowerCase()) {
+    'common' => t('Common', 'ធម្មតា'),
+    'rare' => t('Rare', 'កម្រ'),
+    'epic' => t('Epic', 'អស្ចារ្យ'),
+    _ => value,
+  };
   @override
   void initState() {
     super.initState();
@@ -68,10 +82,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     if (!auth.authenticated || destination == null || lead == null) return;
     final scope = (auth.session!.user.id, realm);
     final state = ref.read(adventureProvider(scope));
-    if (!encounters.roll(
-      DateTime.now(),
-      eligible: state.canAct && !state.active,
-    )) {
+    if (!encounters.roll(DateTime.now(), eligible: state.canStart)) {
       return;
     }
     setState(() => awaitingFight = true);
@@ -86,11 +97,24 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     super.dispose();
   }
 
+  void _chooseRealm(String value) {
+    setState(() {
+      realm = value;
+      destination = widget.destinationId;
+      safe = false;
+      lead = null;
+      boss = false;
+      discover = false;
+      awaitingFight = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final connected = ref.watch(environmentProvider).connected;
     if (!connected || !auth.authenticated) {
+      _presentedBattle = null;
       return Scaffold(
         appBar: AppBar(title: Text(t('Creature trails', 'ដំណើរសត្វវេទមន្ត'))),
         body: Center(
@@ -120,9 +144,48 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     final state = ref.watch(provider);
     final controller = ref.read(provider.notifier);
     final snapshot = state.snapshot;
-    final selected = state.world
-        .where((d) => string(d, 'id') == destination)
+    final activeBattle = state.active && !state.expired && snapshot != null
+        ? '${auth.session!.user.id}/$realm/${string(state.session!, 'id')}'
+        : null;
+    if (_presentedBattle != activeBattle) {
+      _presentedBattle = activeBattle;
+      if (activeBattle != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _presentedBattle != activeBattle) return;
+          final anchor = _battleAnchor.currentContext;
+          if (anchor == null) return;
+          unawaited(
+            Scrollable.ensureVisible(
+              anchor,
+              alignment: 0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+            ),
+          );
+        });
+      }
+    }
+    final playerLevel = (1 + integer(snapshot?.profile ?? {}, 'xp') ~/ 100)
+        .clamp(1, 50);
+    final selected =
+        state.world.where((d) => string(d, 'id') == destination).firstOrNull ??
+        (realm == 'practice'
+            ? state.world
+                  .where((d) => integer(d, 'minLevel') <= playerLevel)
+                  .firstOrNull
+            : null);
+    final selectedId = selected == null ? null : string(selected, 'id');
+    final reviewedFieldAvailable = state.world.any(
+      (d) => integer(d, 'approved') == 1 && integer(d, 'accessible') == 1,
+    );
+    final exploration = snapshot?.exploration
+        .where((entry) => string(entry, 'id') == selectedId)
         .firstOrNull;
+    final guardianAvailable =
+        selected != null &&
+        integer(exploration ?? {}, 'successes') >=
+            integer(selected, 'bossUnlockWins');
     final owned = (snapshot?.monsters ?? [])
         .where(
           (m) =>
@@ -138,6 +201,8 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
               (owned.isEmpty ? null : string(owned.first, 'id'));
     final eligible =
         selected != null &&
+        playerLevel >= integer(selected, 'minLevel') &&
+        (!boss || guardianAvailable) &&
         (realm == 'practice' ||
             (integer(selected, 'approved') == 1 &&
                 integer(selected, 'accessible') == 1));
@@ -156,468 +221,650 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                VisualHero(
-                  title: t(
-                    'A new trail. A new companion.',
-                    'ដំណើរថ្មី។ មិត្តរួមដំណើរថ្មី។',
-                  ),
-                  caption: t('CREATURE TRAILS', 'ដំណើរសត្វវេទមន្ត'),
-                ),
-                ExpansionTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: Text(t('About this adventure', 'អំពីដំណើរនេះ')),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        t(
-                          'Temporary procedural 3D artwork. Game gold has no cash value; travel redemption is unavailable.',
-                          'រូបភាព 3D បណ្ដោះអាសន្ន។ មាសហ្គេមគ្មានតម្លៃជាប្រាក់ និងមិនអាចប្ដូររង្វាន់ធ្វើដំណើរបានទេ។',
-                        ),
-                      ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  VisualHero(
+                    title: t(
+                      'A new trail. A new companion.',
+                      'ដំណើរថ្មី។ មិត្តរួមដំណើរថ្មី។',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    ChoiceChip(
-                      label: Text(t('Field adventure', 'ផ្សងព្រេងនៅទីតាំងពិត')),
-                      selected: realm == 'field',
-                      onSelected: state.busy || state.pending
-                          ? null
-                          : (_) => setState(() {
-                              realm = 'field';
-                              safe = false;
-                              lead = null;
-                            }),
-                    ),
-                    ChoiceChip(
-                      label: Text(t('Server practice', 'សាកល្បងលើម៉ាស៊ីនមេ')),
-                      selected: realm == 'practice',
-                      onSelected:
-                          state.busy ||
-                              state.pending ||
-                              state.capabilities['practiceEnabled'] != true
-                          ? null
-                          : (_) => setState(() {
-                              realm = 'practice';
-                              safe = false;
-                              lead = null;
-                            }),
-                    ),
-                  ],
-                ),
-                if (realm == 'practice')
-                  _notice(
-                    t(
-                      'SIMULATION • No GPS required. Separate test XP, gold and collection; never transferred to field rewards.',
-                      'សាកល្បង • មិនត្រូវការ GPS។ XP មាស និងសត្វសាកល្បងដាច់ដោយឡែក មិនផ្ទេរទៅរង្វាន់ទីតាំងពិតទេ។',
-                    ),
+                    caption: t('CREATURE TRAILS', 'ដំណើរសត្វវេទមន្ត'),
                   ),
-                if (state.busy)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: LinearProgressIndicator(),
-                  ),
-                if (state.failure != null)
-                  _notice(
-                    '${t('Could not sync adventure.', 'មិនអាចធ្វើសមកាលកម្មបានទេ។')} ${state.failure!.message}',
-                  ),
-                if (state.retryAt != null)
-                  Text(
-                    '${t('Retry after', 'ព្យាយាមក្រោយ')} ${state.retryAt!.toLocal()}',
-                  ),
-                if (state.pending) ...[
-                  Text(
-                    t(
-                      'The result is not confirmed. Retry the same request safely before another action.',
-                      'មិនទាន់បញ្ជាក់លទ្ធផល។ ព្យាយាមសំណើដដែលម្ដងទៀត មុនធ្វើសកម្មភាពផ្សេង។',
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: state.busy ? null : controller.retry,
-                    child: Text(
-                      t('Retry pending action', 'ព្យាយាមសកម្មភាពដែលរង់ចាំ'),
-                    ),
-                  ),
-                ] else if (state.needsRefresh)
-                  OutlinedButton(
-                    onPressed: state.busy ? null : controller.load,
-                    child: Text(
-                      t('Refresh adventure', 'ផ្ទុកដំណើរផ្សងព្រេងម្ដងទៀត'),
-                    ),
-                  ),
-                if (snapshot != null) ...[
-                  VisualActions(
-                    children: [
-                      for (final entry in {
-                        'collection': t('Collection', 'បណ្ដុំសត្វ'),
-                        'party': t('Party', 'ក្រុម'),
-                        'inventory': t('Inventory', 'សម្ភារៈ'),
-                        'quests': t('Quests', 'បេសកកម្ម'),
-                        'achievements': t('Achievements', 'សមិទ្ធផល'),
-                      }.entries)
-                        VisualAction(
-                          compact: true,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AdventureManagement(
-                                scope: (auth.session!.user.id, realm),
-                                initial: entry.key,
+                  const SizedBox(height: 16),
+                  if (realm == 'field')
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: const [
+                                CreatureAvatar(speciesId: 'mossling'),
+                                SizedBox(width: 8),
+                                CreatureAvatar(speciesId: 'amberhorn'),
+                                SizedBox(width: 8),
+                                CreatureAvatar(speciesId: 'bubblefin'),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              t(
+                                'Meet your first creature',
+                                'ជួបសត្វវេទមន្តដំបូងរបស់អ្នក',
+                              ),
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              state.capabilities['practiceEnabled'] == true
+                                  ? t(
+                                      'Battle, capture companions and earn practice XP. Your practice collection saves to this account, separately from field adventures.',
+                                      'ប្រយុទ្ធ ចាប់មិត្តរួមដំណើរ និងទទួល XP សាកល្បង។ បណ្ដុំសាកល្បងរក្សាទុកក្នុងគណនី ដាច់ពីការផ្សងព្រេងនៅទីតាំងពិត។',
+                                    )
+                                  : t(
+                                      'Try temple and beach creatures on this device. Practice progress stays here and never becomes an account reward.',
+                                      'សាកល្បងសត្វប្រាសាទ និងឆ្នេរនៅឧបករណ៍នេះ។ វឌ្ឍនភាពសាកល្បងមិនផ្ទេរជារង្វាន់គណនីទេ។',
+                                    ),
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              key: const Key('adventure-play-practice'),
+                              onPressed:
+                                  state.busy || state.pending || state.active
+                                  ? null
+                                  : state.capabilities['practiceEnabled'] ==
+                                        true
+                                  ? () => _chooseRealm('practice')
+                                  : () => context.push('/rpg'),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: Text(
+                                state.capabilities['practiceEnabled'] == true
+                                    ? t('Play practice', 'លេងសាកល្បង')
+                                    : t(
+                                        'Play on this device',
+                                        'លេងនៅឧបករណ៍នេះ',
+                                      ),
                               ),
                             ),
-                          ),
-                          icon: featureIcon(entry.key),
-                          label: entry.value,
-                        ),
-                    ],
-                  ),
-                  Text(
-                    '${t('Title', 'ងារ')}: ${string(snapshot.profile, 'equippedTitle', 'traveler')}',
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      Chip(
-                        avatar: const Icon(Icons.stars_rounded, size: 20),
-                        label: Text(
-                          '${t('Level', 'កម្រិត')} ${(1 + integer(snapshot.profile, 'xp') ~/ 100).clamp(1, 50)}',
+                            if (!state.busy && !reviewedFieldAvailable) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                t(
+                                  'Field encounters are waiting for reviewed, permitted locations. You can play practice now without GPS.',
+                                  'ការជួបនៅទីតាំងពិតរង់ចាំទីតាំងដែលបានពិនិត្យ និងអនុញ្ញាត។ អ្នកអាចលេងសាកល្បងឥឡូវ ដោយមិនប្រើ GPS។',
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      Chip(
-                        avatar: const Icon(Icons.bolt_rounded, size: 20),
-                        label: Text('${integer(snapshot.profile, 'xp')} XP'),
-                      ),
-                      Chip(
-                        label: Text(
-                          '${integer(snapshot.profile, 'gold')} ${t('gold', 'មាស')}',
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (state.session != null)
-                    if (!state.expired)
-                      _battle(state, snapshot, controller)
-                    else
-                      _notice(
-                        t(
-                          'Encounter expired. Refresh to continue; no reward is granted for expiry.',
-                          'ការជួបនេះផុតកំណត់ហើយ។ ផ្ទុកឡើងវិញដើម្បីបន្ត។',
-                        ),
-                      ),
-                  _heading(t('Choose your destination', 'ជ្រើសរើសគោលដៅ')),
-                  Text(
-                    t(
-                      'Map pins are destination information, not live monster locations.',
-                      'ម្ជុលផែនទីជាព័ត៌មានគោលដៅ មិនមែនទីតាំងសត្វផ្ទាល់ទេ។',
                     ),
+                  ExpansionTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: Text(t('About this adventure', 'អំពីដំណើរនេះ')),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          t(
+                            'Temporary procedural 3D artwork. Game gold has no cash value; travel redemption is unavailable.',
+                            'រូបភាព 3D បណ្ដោះអាសន្ន។ មាសហ្គេមគ្មានតម្លៃជាប្រាក់ និងមិនអាចប្ដូររង្វាន់ធ្វើដំណើរបានទេ។',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.map_outlined),
-                    label: Text(
-                      t('Choose on OpenStreetMap', 'ជ្រើសរើសលើ OpenStreetMap'),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: Text(
+                          t('Field adventure', 'ផ្សងព្រេងនៅទីតាំងពិត'),
+                        ),
+                        selected: realm == 'field',
+                        onSelected: state.busy || state.pending
+                            ? null
+                            : (_) => _chooseRealm('field'),
+                      ),
+                      ChoiceChip(
+                        label: Text(t('Server practice', 'សាកល្បងលើម៉ាស៊ីនមេ')),
+                        selected: realm == 'practice',
+                        onSelected:
+                            state.busy ||
+                                state.pending ||
+                                state.capabilities['practiceEnabled'] != true
+                            ? null
+                            : (_) => _chooseRealm('practice'),
+                      ),
+                    ],
+                  ),
+                  if (realm == 'practice')
+                    _notice(
+                      t(
+                        'SIMULATION • No GPS required. Separate test XP, gold and collection; never transferred to field rewards.',
+                        'សាកល្បង • មិនត្រូវការ GPS។ XP មាស និងសត្វសាកល្បងដាច់ដោយឡែក មិនផ្ទេរទៅរង្វាន់ទីតាំងពិតទេ។',
+                      ),
                     ),
-                    onPressed: state.busy || state.pending || state.active
-                        ? null
-                        : () async {
-                            final id = await Navigator.of(context).push<String>(
+                  if (realm == 'practice' && state.failure != null)
+                    OutlinedButton.icon(
+                      onPressed: state.pending || state.active
+                          ? null
+                          : () => context.push('/rpg'),
+                      icon: const Icon(Icons.phone_android_rounded),
+                      label: Text(
+                        t(
+                          'Try separate on-device practice',
+                          'សាកល្បងដាច់ដោយឡែកនៅឧបករណ៍នេះ',
+                        ),
+                      ),
+                    ),
+                  if (state.busy)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: LinearProgressIndicator(),
+                    ),
+                  if (state.failure != null)
+                    _notice(
+                      '${t('Could not sync adventure.', 'មិនអាចធ្វើសមកាលកម្មបានទេ។')} ${state.failure!.message}',
+                    ),
+                  if (state.retryAt != null)
+                    Text(
+                      '${t('Retry after', 'ព្យាយាមក្រោយ')} ${travelDateTime(state.retryAt!.toIso8601String(), locale: Localizations.localeOf(context).languageCode)}',
+                    ),
+                  if (state.pending) ...[
+                    Text(
+                      t(
+                        'The result is not confirmed. Retry the same request safely before another action.',
+                        'មិនទាន់បញ្ជាក់លទ្ធផល។ ព្យាយាមសំណើដដែលម្ដងទៀត មុនធ្វើសកម្មភាពផ្សេង។',
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: state.busy ? null : controller.retry,
+                      child: Text(
+                        t('Retry pending action', 'ព្យាយាមសកម្មភាពដែលរង់ចាំ'),
+                      ),
+                    ),
+                  ] else if (state.needsRefresh)
+                    OutlinedButton(
+                      onPressed: state.busy ? null : controller.load,
+                      child: Text(
+                        t('Refresh adventure', 'ផ្ទុកដំណើរផ្សងព្រេងម្ដងទៀត'),
+                      ),
+                    ),
+                  if (snapshot != null) ...[
+                    RpgCardGrid(
+                      children: [
+                        for (final entry in {
+                          'collection': t('Collection', 'បណ្ដុំសត្វ'),
+                          'party': t('Party', 'ក្រុម'),
+                          'inventory': t('Inventory', 'សម្ភារៈ'),
+                          'quests': t('Quests', 'បេសកកម្ម'),
+                          'achievements': t('Achievements', 'សមិទ្ធផល'),
+                        }.entries)
+                          VisualAction(
+                            compact: true,
+                            onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => Scaffold(
-                                  appBar: AppBar(
-                                    title: Text(
-                                      t('Destination map', 'ផែនទីគោលដៅ'),
-                                    ),
-                                  ),
-                                  body: SafeArea(
-                                    child: TravelOpenMap(
-                                      places: [
-                                        for (final d in state.world)
-                                          MapPlace(
-                                            string(d, 'id'),
-                                            string(d, 'name'),
-                                            (field(d, 'latitude') as num)
-                                                .toDouble(),
-                                            (field(d, 'longitude') as num)
-                                                .toDouble(),
-                                          ),
-                                      ],
-                                      onPlaceSelected: (p) =>
-                                          Navigator.of(context).pop(p.id),
-                                    ),
-                                  ),
+                                builder: (_) => AdventureManagement(
+                                  scope: (auth.session!.user.id, realm),
+                                  initial: entry.key,
                                 ),
                               ),
-                            );
-                            if (mounted && id != null) {
-                              setState(() {
-                                destination = id;
-                                safe = false;
-                              });
-                            }
-                          },
-                  ),
-                  for (final d in state.world)
-                    Card(
-                      child: ListTile(
-                        selected: string(d, 'id') == destination,
-                        leading: Icon(
-                          string(d, 'habitat') == 'beach'
-                              ? Icons.beach_access_outlined
-                              : Icons.temple_buddhist_outlined,
-                        ),
-                        title: Text(string(d, 'name')),
-                        subtitle: Text(
-                          '${string(d, 'habitat')} • ${t('Level', 'កម្រិត')} ${integer(d, 'minLevel')} • ${integer(d, 'radiusM')} m\n${integer(d, 'approved') == 1 && integer(d, 'accessible') == 1 ? t('Reviewed location', 'ទីតាំងបានពិនិត្យ') : t('Test fixture • field play unavailable', 'ទីតាំងសាកល្បង • មិនអាចលេងនៅទីតាំងពិតបានទេ')}',
-                        ),
-                        trailing: string(d, 'id') == destination
-                            ? const Icon(Icons.check_circle)
-                            : null,
-                        onTap: state.busy || state.pending || state.active
-                            ? null
-                            : () => setState(() {
-                                destination = string(d, 'id');
-                                safe = false;
-                              }),
-                      ),
+                            ),
+                            icon: featureIcon(entry.key),
+                            label: entry.value,
+                          ),
+                      ],
                     ),
-                  if (state.world.isEmpty)
+                    Text(
+                      '${t('Title', 'ងារ')}: ${string(snapshot.profile, 'equippedTitle', 'traveler')}',
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Chip(
+                          avatar: const Icon(Icons.stars_rounded, size: 20),
+                          label: Text(
+                            '${t('Level', 'កម្រិត')} ${(1 + integer(snapshot.profile, 'xp') ~/ 100).clamp(1, 50)}',
+                          ),
+                        ),
+                        Chip(
+                          avatar: const Icon(Icons.bolt_rounded, size: 20),
+                          label: Text('${integer(snapshot.profile, 'xp')} XP'),
+                        ),
+                        Chip(
+                          label: Text(
+                            '${integer(snapshot.profile, 'gold')} ${t('gold', 'មាស')}',
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (state.session != null)
+                      if (!state.expired)
+                        KeyedSubtree(
+                          key: _battleAnchor,
+                          child: _battle(state, snapshot, controller),
+                        )
+                      else
+                        _notice(
+                          t(
+                            'Encounter expired. Refresh to continue; no reward is granted for expiry.',
+                            'ការជួបនេះផុតកំណត់ហើយ។ ផ្ទុកឡើងវិញដើម្បីបន្ត។',
+                          ),
+                        ),
+                    _heading(t('Choose your destination', 'ជ្រើសរើសគោលដៅ')),
                     Text(
                       t(
-                        'No destinations are configured.',
-                        'មិនទាន់មានគោលដៅដែលបានកំណត់ទេ។',
+                        'Map pins are destination information, not live monster locations.',
+                        'ម្ជុលផែនទីជាព័ត៌មានគោលដៅ មិនមែនទីតាំងសត្វផ្ទាល់ទេ។',
                       ),
                     ),
-                  if (selected != null) ...[
-                    Text(
-                      '${t('Recommended level', 'កម្រិតណែនាំ')}: ${integer(selected, 'recommendedLevel')} • ${t('Enemy level', 'កម្រិតសត្រូវ')}: ${integer(selected, 'enemyLevelMin')}–${integer(selected, 'enemyLevelMax')}',
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.map_outlined),
+                      label: Text(t('Choose on map', 'ជ្រើសរើសលើផែនទី')),
+                      onPressed: state.busy || state.pending || state.active
+                          ? null
+                          : () async {
+                              final id = await Navigator.of(context)
+                                  .push<String>(
+                                    MaterialPageRoute(
+                                      builder: (_) => Scaffold(
+                                        appBar: AppBar(
+                                          title: Text(
+                                            t('Destination map', 'ផែនទីគោលដៅ'),
+                                          ),
+                                        ),
+                                        body: SafeArea(
+                                          child: TravelOpenMap(
+                                            places: [
+                                              for (final d in state.world)
+                                                MapPlace(
+                                                  string(d, 'id'),
+                                                  string(d, 'name'),
+                                                  (field(d, 'latitude') as num)
+                                                      .toDouble(),
+                                                  (field(d, 'longitude') as num)
+                                                      .toDouble(),
+                                                ),
+                                            ],
+                                            onPlaceSelected: (p) =>
+                                                Navigator.of(context).pop(p.id),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                              if (mounted && id != null) {
+                                setState(() {
+                                  destination = id;
+                                  safe = false;
+                                  boss = false;
+                                });
+                              }
+                            },
                     ),
-                    for (final progress in snapshot.exploration.where(
-                      (p) => string(p, 'id') == destination,
-                    ))
+                    for (final d in state.world)
+                      Card(
+                        margin: const EdgeInsets.only(top: 12),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          selected: string(d, 'id') == selectedId,
+                          leading: Icon(
+                            string(d, 'habitat') == 'beach'
+                                ? Icons.beach_access_outlined
+                                : Icons.temple_buddhist_outlined,
+                          ),
+                          title: Text(string(d, 'name')),
+                          subtitle: Text(
+                            '${string(d, 'habitat')} • ${t('Level', 'កម្រិត')} ${integer(d, 'minLevel')} • ${integer(d, 'radiusM')} m\n${integer(d, 'approved') == 1 && integer(d, 'accessible') == 1 ? t('Reviewed location', 'ទីតាំងបានពិនិត្យ') : t('Test fixture • field play unavailable', 'ទីតាំងសាកល្បង • មិនអាចលេងនៅទីតាំងពិតបានទេ')}',
+                          ),
+                          trailing: string(d, 'id') == selectedId
+                              ? const Icon(Icons.check_circle)
+                              : null,
+                          onTap: state.busy || state.pending || state.active
+                              ? null
+                              : () => setState(() {
+                                  destination = string(d, 'id');
+                                  safe = false;
+                                  boss = false;
+                                }),
+                        ),
+                      ),
+                    if (state.world.isEmpty)
                       Text(
-                        '${t('Exploration', 'ការរុករក')}: ${integer(progress, 'successes')} / ${integer(selected, 'bossUnlockWins')} • ${t('Guardians defeated', 'អ្នកការពារដែលបានឈ្នះ')}: ${integer(progress, 'bosses')}',
+                        t(
+                          'No destinations are configured.',
+                          'មិនទាន់មានគោលដៅដែលបានកំណត់ទេ។',
+                        ),
+                      ),
+                    if (selected != null) ...[
+                      if (playerLevel < integer(selected, 'minLevel'))
+                        _notice(
+                          t(
+                            'Reach level ${integer(selected, 'minLevel')} to play here. Start with an earlier trail to gain XP.',
+                            'ឈានដល់កម្រិត ${integer(selected, 'minLevel')} ដើម្បីលេងនៅទីនេះ។ ចាប់ផ្ដើមផ្លូវមុន ដើម្បីទទួល XP។',
+                          ),
+                        ),
+                      Text(
+                        '${t('Recommended level', 'កម្រិតណែនាំ')}: ${integer(selected, 'recommendedLevel')} • ${t('Enemy level', 'កម្រិតសត្រូវ')}: ${integer(selected, 'enemyLevelMin')}–${integer(selected, 'enemyLevelMax')}',
+                      ),
+                      for (final progress in snapshot.exploration.where(
+                        (p) => string(p, 'id') == selectedId,
+                      ))
+                        Text(
+                          '${t('Exploration', 'ការរុករក')}: ${integer(progress, 'successes')} / ${integer(selected, 'bossUnlockWins')} • ${t('Guardians defeated', 'អ្នកការពារដែលបានឈ្នះ')}: ${integer(progress, 'bosses')}',
+                        ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: boss,
+                        onChanged:
+                            state.canAct && !state.active && guardianAvailable
+                            ? (v) => setState(() => boss = v ?? false)
+                            : null,
+                        title: Text(
+                          t('Guardian challenge', 'ប្រកួតជាមួយអ្នកការពារ'),
+                        ),
+                        subtitle: Text(
+                          '${t('Requires successful encounters here', 'ត្រូវការជួបសត្វបានជោគជ័យនៅទីនេះ')}: ${integer(selected, 'bossUnlockWins')} • Lv ${integer(selected, 'bossLevel')}',
+                        ),
+                      ),
+                      Text(
+                        '${t('Encounter rules', 'ច្បាប់ជួបសត្វ')}: ${integer(selected, 'cooldownSeconds')}s • ${integer(selected, 'dailyLimit')}/UTC day',
+                      ),
+                      Text(
+                        '${t('Available species', 'ប្រភេទសត្វដែលអាចជួប')}: ${objects(selected['spawnRules']).map((rule) => creatureName(string(rule, 'speciesId'))).join(', ')}',
+                      ),
+                    ],
+                    _heading(t('Your companion', 'មិត្តរួមដំណើររបស់អ្នក')),
+                    for (final m in owned)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: CreatureAvatar(
+                            speciesId: string(m, 'speciesId'),
+                          ),
+                          title: Text(creatureName(string(m, 'speciesId'))),
+                          subtitle: Text(
+                            '${t('Level', 'កម្រិត')} ${(1 + integer(m, 'xp') ~/ 100).clamp(1, 50)} • ${integer(m, 'xp')} XP • ${t('Variation', 'លក្ខណៈពិសេស')} ${integer(m, 'variation')}',
+                          ),
+                          trailing: Icon(
+                            string(m, 'id') == monsterId
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                          ),
+                          onTap: state.canAct && !state.active
+                              ? () => setState(() => lead = string(m, 'id'))
+                              : null,
+                        ),
                       ),
                     CheckboxListTile(
+                      key: const Key('adventure-safety-consent'),
                       contentPadding: EdgeInsets.zero,
-                      value: boss,
+                      value: safe,
                       onChanged: state.canAct && !state.active
-                          ? (v) => setState(() => boss = v ?? false)
+                          ? (value) => setState(() => safe = value ?? false)
                           : null,
                       title: Text(
-                        t('Guardian challenge', 'ប្រកួតជាមួយអ្នកការពារ'),
+                        realm == 'practice'
+                            ? t(
+                                'I understand this is practice: no GPS, verified visits or real-world rewards.',
+                                'ខ្ញុំយល់ថានេះជាការសាកល្បង៖ គ្មាន GPS ការបញ្ជាក់ការទស្សនា ឬរង្វាន់ជាប្រាក់។',
+                              )
+                            : t(
+                                'I am stationary in a safe, permitted area. I will not play in traffic or restricted places.',
+                                'ខ្ញុំឈប់នៅតំបន់សុវត្ថិភាពដែលអនុញ្ញាត។ ខ្ញុំមិនលេងនៅផ្លូវចរាចរណ៍ ឬទីតាំងហាមឃាត់ទេ។',
+                              ),
                       ),
-                      subtitle: Text(
-                        '${t('Requires successful encounters here', 'ត្រូវការជួបសត្វបានជោគជ័យនៅទីនេះ')}: ${integer(selected, 'bossUnlockWins')} • Lv ${integer(selected, 'bossLevel')}',
-                      ),
                     ),
-                    Text(
-                      '${t('Encounter rules', 'ច្បាប់ជួបសត្វ')}: ${integer(selected, 'cooldownSeconds')}s • ${integer(selected, 'dailyLimit')}/UTC day',
-                    ),
-                    Text(
-                      '${t('Available species', 'ប្រភេទសត្វដែលអាចជួប')}: ${objects(selected['spawnRules']).map((rule) => '${string(snapshot.speciesFor(string(rule, 'speciesId')), 'name')} (${t('weight', 'ទម្ងន់')} ${integer(rule, 'weight')})').join(', ')}',
-                    ),
-                  ],
-                  _heading(t('Your companion', 'មិត្តរួមដំណើររបស់អ្នក')),
-                  for (final m in owned)
-                    Card(
-                      child: ListTile(
-                        leading: CreatureAvatar(
-                          speciesId: string(m, 'speciesId'),
-                        ),
+                    if (realm == 'field')
+                      SwitchListTile(
+                        value: discover,
+                        onChanged:
+                            safe &&
+                                eligible &&
+                                monsterId != null &&
+                                state.canAct &&
+                                !state.active
+                            ? (value) => setState(() {
+                                discover = value;
+                                lead = monsterId;
+                              })
+                            : null,
+                        secondary: const Icon(Icons.radar),
                         title: Text(
-                          string(
-                            snapshot.speciesFor(string(m, 'speciesId')),
-                            'name',
-                            string(m, 'speciesId'),
+                          t(
+                            'Discover random creatures',
+                            'ស្វែងរកសត្វដោយចៃដន្យ',
                           ),
                         ),
                         subtitle: Text(
-                          '${t('Level', 'កម្រិត')} ${(1 + integer(m, 'xp') ~/ 100).clamp(1, 50)} • ${integer(m, 'xp')} XP • ${t('Variation', 'លក្ខណៈពិសេស')} ${integer(m, 'variation')}',
+                          t(
+                            'Optional checks while this page is open and you remain safely stationary. The server verifies location and limits encounters.',
+                            'ពិនិត្យនៅពេលទំព័រនេះបើក ហើយអ្នកនៅទីតាំងមានសុវត្ថិភាព។ ម៉ាស៊ីនមេផ្ទៀងផ្ទាត់ទីតាំង និងកម្រិតការជួប។',
+                          ),
                         ),
-                        trailing: Icon(
-                          string(m, 'id') == monsterId
-                              ? Icons.check_circle
-                              : Icons.circle_outlined,
-                        ),
-                        onTap: state.canAct && !state.active
-                            ? () => setState(() => lead = string(m, 'id'))
-                            : null,
                       ),
-                    ),
-                  CheckboxListTile(
-                    key: const Key('adventure-safety-consent'),
-                    contentPadding: EdgeInsets.zero,
-                    value: safe,
-                    onChanged: state.canAct && !state.active
-                        ? (value) => setState(() => safe = value ?? false)
-                        : null,
-                    title: Text(
-                      t(
-                        'I am stationary in a safe, permitted area. I will not play in traffic or restricted places.',
-                        'ខ្ញុំឈប់នៅតំបន់សុវត្ថិភាពដែលអនុញ្ញាត។ ខ្ញុំមិនលេងនៅផ្លូវចរាចរណ៍ ឬទីតាំងហាមឃាត់ទេ។',
+                    FilledButton.icon(
+                      key: const Key('adventure-start-encounter'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
                       ),
-                    ),
-                  ),
-                  if (realm == 'field')
-                    SwitchListTile(
-                      value: discover,
-                      onChanged:
-                          safe &&
+                      icon: const Icon(Icons.explore_outlined),
+                      onPressed:
+                          state.canStart &&
+                              safe &&
                               eligible &&
-                              monsterId != null &&
-                              state.canAct &&
-                              !state.active
-                          ? (value) => setState(() {
-                              discover = value;
-                              lead = monsterId;
-                            })
+                              monsterId != null
+                          ? () => controller.start(
+                              selectedId!,
+                              monsterId,
+                              safe,
+                              boss: boss,
+                            )
                           : null,
-                      secondary: const Icon(Icons.radar),
-                      title: Text(
-                        t('Discover random creatures', 'ស្វែងរកសត្វដោយចៃដន្យ'),
+                      label: Text(
+                        realm == 'practice'
+                            ? t(
+                                'Start test encounter',
+                                'ចាប់ផ្ដើមជួបសត្វសាកល្បង',
+                              )
+                            : t(
+                                'Check GPS & start encounter',
+                                'ពិនិត្យ GPS និងចាប់ផ្ដើមជួបសត្វ',
+                              ),
                       ),
-                      subtitle: Text(
-                        t(
-                          'Optional checks while this page is open and you remain safely stationary. The server verifies location and limits encounters.',
-                          'ពិនិត្យនៅពេលទំព័រនេះបើក ហើយអ្នកនៅទីតាំងមានសុវត្ថិភាព។ ម៉ាស៊ីនមេផ្ទៀងផ្ទាត់ទីតាំង និងកម្រិតការជួប។',
+                    ),
+                    if (state.encounterCoolingDown && !state.active)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: EncounterCountdown(
+                          expiresAt: state.nextEncounter!.toIso8601String(),
+                          cooldown: true,
                         ),
                       ),
-                    ),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                    icon: const Icon(Icons.explore_outlined),
-                    onPressed:
-                        state.canAct &&
-                            !state.active &&
-                            safe &&
-                            eligible &&
-                            monsterId != null
-                        ? () => controller.start(
-                            destination!,
-                            monsterId,
-                            safe,
-                            boss: boss,
-                          )
-                        : null,
-                    label: Text(
-                      realm == 'practice'
-                          ? t('Start test encounter', 'ចាប់ផ្ដើមជួបសត្វសាកល្បង')
-                          : t(
-                              'Check GPS & start encounter',
-                              'ពិនិត្យ GPS និងចាប់ផ្ដើមជួបសត្វ',
+                    const SizedBox(height: 20),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.task_alt_rounded, size: 32),
+                        title: Text(t('Quest journal', 'កំណត់ហេតុបេសកកម្ម')),
+                        subtitle: Text(
+                          '${snapshot.quests.where((q) => q['completed'] == true && q['claimed'] != true).length} ${t('rewards ready', 'រង្វាន់រួចរាល់')}',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdventureManagement(
+                              scope: (auth.session!.user.id, realm),
+                              initial: 'quests',
                             ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.task_alt_rounded, size: 32),
-                      title: Text(t('Quest journal', 'កំណត់ហេតុបេសកកម្ម')),
-                      subtitle: Text(
-                        '${snapshot.quests.where((q) => q['completed'] == true && q['claimed'] != true).length} ${t('rewards ready', 'រង្វាន់រួចរាល់')}',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => AdventureManagement(
-                            scope: (auth.session!.user.id, realm),
-                            initial: 'quests',
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  ExpansionTile(
-                    title: Text(
-                      t(
-                        'Creature guide · not nearby encounters',
-                        'បញ្ជីសត្វ · មិនមែនការជួបនៅជិតទេ',
-                      ),
-                    ),
-                    leading: const Icon(Icons.menu_book_outlined),
-                    children: [
-                      VisualActions(
+                    const SizedBox(height: 16),
+                    RpgPanel(
+                      padding: EdgeInsets.zero,
+                      child: ExpansionTile(
+                        key: const Key('rpg-creature-guide'),
+                        tilePadding: const EdgeInsets.all(16),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          16,
+                          0,
+                          16,
+                          20,
+                        ),
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        title: Text(t('Creature guide', 'បញ្ជីសត្វវេទមន្ត')),
+                        subtitle: Text(
+                          t(
+                            'Species guide, not a live nearby scan.',
+                            'បញ្ជីប្រភេទសត្វ មិនមែនការស្វែងរកសត្វនៅជិតផ្ទាល់ទេ។',
+                          ),
+                        ),
+                        leading: const Icon(Icons.menu_book_outlined),
                         children: [
-                          for (final s in snapshot.species)
-                            Card(
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => AdventureManagement(
-                                      scope: (auth.session!.user.id, realm),
+                          RpgCardGrid(
+                            minCardWidth: 140,
+                            children: [
+                              for (final species in snapshot.species)
+                                RpgPanel(
+                                  padding: EdgeInsets.zero,
+                                  child: InkWell(
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => AdventureManagement(
+                                          scope: (auth.session!.user.id, realm),
+                                        ),
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        children: [
+                                          if (creatures.any(
+                                            (c) =>
+                                                c.id == string(species, 'id'),
+                                          ))
+                                            SizedBox(
+                                              height: 110,
+                                              child: CreaturePortrait(
+                                                creature: creatures.firstWhere(
+                                                  (c) =>
+                                                      c.id ==
+                                                      string(species, 'id'),
+                                                ),
+                                              ),
+                                            ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            creatureName(string(species, 'id')),
+                                            textAlign: TextAlign.center,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            creatureRarity(
+                                              string(species, 'rarity'),
+                                            ),
+                                            textAlign: TextAlign.center,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            creatureInspirationNotice(
+                              language: Localizations.localeOf(
+                                context,
+                              ).languageCode,
+                            ),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    RpgPanel(
+                      padding: EdgeInsets.zero,
+                      child: ExpansionTile(
+                        key: const Key('rpg-reward-history'),
+                        tilePadding: const EdgeInsets.all(16),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          16,
+                          0,
+                          16,
+                          20,
+                        ),
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        title: Text(t('Reward history', 'ប្រវត្តិរង្វាន់')),
+                        leading: const Icon(Icons.history_rounded),
+                        children: spacedRpgItems([
+                          if (snapshot.ledger.isEmpty)
+                            RpgEmptyState(
+                              icon: Icons.redeem_outlined,
+                              message: t(
+                                'No rewards yet. Completed battles and claimed quests appear here.',
+                                'មិនទាន់មានរង្វាន់ទេ។ ការប្រយុទ្ធ និងរង្វាន់បេសកកម្មនឹងបង្ហាញនៅទីនេះ។',
+                              ),
+                            ),
+                          for (final reward in snapshot.ledger)
+                            RpgPanel(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Wrap(
+                                    spacing: 16,
+                                    runSpacing: 10,
                                     children: [
-                                      if (creatures.any((c) => c.id == s['id']))
-                                        SizedBox(
-                                          height: 110,
-                                          child: CreaturePortrait(
-                                            creature: creatures.firstWhere(
-                                              (c) => c.id == s['id'],
-                                            ),
-                                          ),
-                                        ),
-                                      Text(
-                                        string(s, 'name'),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
+                                      RpgFact(
+                                        Icons.bolt_rounded,
+                                        '+${integer(reward, 'xp')} XP',
                                       ),
-                                      Text(
-                                        string(s, 'rarity'),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
+                                      RpgFact(
+                                        Icons.toll_rounded,
+                                        '+${integer(reward, 'gold')} ${t('gold', 'មាស')}',
                                       ),
                                     ],
                                   ),
-                                ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    travelDateTime(
+                                      string(reward, 'createdAt'),
+                                      locale: Localizations.localeOf(
+                                        context,
+                                      ).languageCode,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                        ],
+                        ]),
                       ),
-                    ],
-                  ),
-                  ExpansionTile(
-                    title: Text(t('Reward history', 'ប្រវត្តិរង្វាន់')),
-                    leading: const Icon(Icons.history),
-                    children: [
-                      if (snapshot.ledger.isEmpty)
-                        Text(
-                          t(
-                            'No rewards yet. Completed battles and claimed quests appear here.',
-                            'មិនទាន់មានរង្វាន់ទេ។ ការប្រយុទ្ធ និងរង្វាន់បេសកកម្មនឹងបង្ហាញនៅទីនេះ។',
-                          ),
-                        ),
-                      for (final r in snapshot.ledger)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.receipt_long_outlined),
-                          title: Text(
-                            '${integer(r, 'xp')} XP • ${integer(r, 'gold')} ${t('gold', 'មាស')}',
-                          ),
-                          subtitle: Text(
-                            '${string(r, 'kind')} • ${travelDateTime(string(r, 'createdAt'), locale: Localizations.localeOf(context).languageCode)}',
-                          ),
-                        ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -631,7 +878,23 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
   );
   Widget _notice(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Semantics(liveRegion: true, child: Text(text)),
+    child: RpgPanel(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Semantics(
+        liveRegion: true,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text)),
+          ],
+        ),
+      ),
+    ),
   );
   Widget _battle(
     AdventureState state,
@@ -643,6 +906,11 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     final enemy = object(battle['enemy']), ally = object(battle['ally']);
     final species = string(enemy, 'speciesId');
     final portrait = creatures.where((c) => c.id == species).firstOrNull;
+    final reward = snapshot.ledger
+        .where(
+          (entry) => string(entry, 'sourceId') == 'battle:${session['id']}',
+        )
+        .firstOrNull;
     final labels = {
       'strike': t('Strike', 'វាយ'),
       'magic': t('Magic', 'វេទមន្ត'),
@@ -654,6 +922,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     };
     if (state.active && awaitingFight) {
       return Card(
+        margin: const EdgeInsets.symmetric(vertical: 16),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -663,9 +932,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               BattleScene(key: ValueKey(session['id']), session: session),
-              Text(
-                '${string(snapshot.speciesFor(species), 'name', species)} · Lv ${integer(enemy, 'level')}',
-              ),
+              Text('${creatureName(species)} · Lv ${integer(enemy, 'level')}'),
               EncounterCountdown(expiresAt: string(session, 'expiresAt')),
               const SizedBox(height: 12),
               Wrap(
@@ -693,13 +960,14 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
       );
     }
     return Card(
+      margin: const EdgeInsets.symmetric(vertical: 16),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '${string(snapshot.speciesFor(species), 'name', species)} • ${t('Level', 'កម្រិត')} ${integer(enemy, 'level')}',
+              '${creatureName(species)} • ${t('Level', 'កម្រិត')} ${integer(enemy, 'level')}',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             BattleScene(key: ValueKey(session['id']), session: session),
@@ -777,19 +1045,86 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                       : null,
                   icon: const Icon(Icons.swap_horiz),
                   label: Text(
-                    '${t('Switch', 'ប្ដូរ')} ${string(object(member['fighter']), 'speciesId')} • ${integer(object(member['fighter']), 'hp')} HP',
+                    '${t('Switch', 'ប្ដូរ')} ${creatureName(string(object(member['fighter']), 'speciesId'))} • ${integer(object(member['fighter']), 'hp')} HP',
                   ),
                 ),
-            ] else
-              _notice(
-                '${t('Encounter result', 'លទ្ធផលជួបសត្វ')}: ${session['status']}. ${t('Rewards shown below are confirmed by the server.', 'រង្វាន់ខាងក្រោមត្រូវបានបញ្ជាក់ដោយម៉ាស៊ីនមេ។')}',
+            ] else ...[
+              const SizedBox(height: 16),
+              Semantics(
+                liveRegion: true,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    switch (session['status']) {
+                      'captured' => Icons.pets_rounded,
+                      'won' => Icons.emoji_events_rounded,
+                      'escaped' => Icons.directions_walk_rounded,
+                      _ => Icons.self_improvement_rounded,
+                    },
+                    size: 36,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: Text(switch (session['status']) {
+                    'captured' => t('A new companion!', 'មិត្តរួមដំណើរថ្មី!'),
+                    'won' => t('Victory!', 'ជ័យជម្នះ!'),
+                    'escaped' => t(
+                      'You left safely',
+                      'អ្នកចាកចេញដោយសុវត្ថិភាព',
+                    ),
+                    'lost' => t(
+                      'Rest and try again',
+                      'សម្រាក រួចសាកល្បងម្ដងទៀត',
+                    ),
+                    _ => t('Encounter complete', 'ការជួបបានបញ្ចប់'),
+                  }),
+                  subtitle: Text(
+                    reward == null
+                        ? session['status'] == 'won' ||
+                                  session['status'] == 'captured'
+                              ? t(
+                                  'See reward history for confirmed rewards.',
+                                  'មើលប្រវត្តិរង្វាន់ដែលបានបញ្ជាក់។',
+                                )
+                              : t(
+                                  'No battle rewards earned.',
+                                  'គ្មានរង្វាន់ប្រយុទ្ធទេ។',
+                                )
+                        : '+${integer(reward, 'xp')} XP · +${integer(reward, 'gold')} ${realm == 'practice' ? t('practice gold', 'មាសសាកល្បង') : t('game gold', 'មាសហ្គេម')}',
+                  ),
+                ),
               ),
+              if (session['status'] == 'captured')
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AdventureManagement(
+                        scope: (
+                          ref.read(authControllerProvider).session!.user.id,
+                          realm,
+                        ),
+                        initial: 'collection',
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.collections_bookmark_outlined),
+                  label: Text(t('View collection', 'មើលបណ្ដុំសត្វ')),
+                ),
+              TextButton.icon(
+                onPressed: state.busy || state.pending
+                    ? null
+                    : controller.dismissCompletedEncounter,
+                icon: const Icon(Icons.explore_outlined),
+                label: Text(t('Explore again', 'រុករកម្ដងទៀត')),
+              ),
+            ],
             ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
               title: Text(t('Battle log', 'កំណត់ហេតុប្រយុទ្ធ')),
-              children: [
+              children: spacedRpgItems([
                 for (final entry in battle['log'] as List? ?? [])
                   Text('• $entry'),
-              ],
+              ], gap: 10),
             ),
             if (state.active)
               EncounterCountdown(expiresAt: string(session, 'expiresAt')),

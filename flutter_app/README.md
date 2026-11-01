@@ -33,6 +33,50 @@ The helper selects the single authorized Android device, checks gateway readines
 
 To run native integration checks, pass `-Test -TestConfig config/auth-test.local.json` containing a dedicated, already verified test account as described in `AUTH_SETUP.md`. Tests create travel records, use a separate secure-storage key and cache scope, and clean their local credentials/cache. After testing, rerun without `-Test` to restore the normal app.
 
+### Reconnect an installed USB test app without rebuilding
+
+USB forwarding disappears after reconnecting the cable or restarting ADB. If
+the backend works on this PC but Anajak Test says it cannot reach the server,
+double-click **Connect Test Phone.cmd** in the project root. Keep the backend
+running and unlock the phone with USB debugging authorized.
+
+The helper checks the local API, restores phone port 8080 to Nginx port 8090,
+and verifies the rule. It does not rebuild, restart or reinstall the app, clear
+data, send sign-in attempts, or change backend settings. Return to the app and
+retry the failed action once. With multiple devices or different ports, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\connect-device.ps1 -DeviceId YOUR_DEVICE_ID -BackendPort 8090 -DevicePort 8080
+```
+
+### Keep an existing Play-signed app while testing
+
+If Android reports `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the installed app and
+the debug APK have different signing certificates. Keep the existing app and
+its data. Build the optional **Anajak Test** debug copy with its own package
+`com.anajak.anajak_travel.preview`:
+
+```powershell
+cd C:\anajak_map\flutter_app
+$previewBefore = $env:ORG_GRADLE_PROJECT_ANAJAK_PREVIEW
+try {
+    $env:ORG_GRADLE_PROJECT_ANAJAK_PREVIEW = 'true'
+    flutter build apk --debug --target-platform android-arm64 --dart-define-from-file=config/connected.usb.json --build-name=1.0.2 --build-number=7
+} finally {
+    $env:ORG_GRADLE_PROJECT_ANAJAK_PREVIEW = $previewBefore
+}
+adb -s YOUR_DEVICE_ID reverse tcp:8080 tcp:8090
+adb -s YOUR_DEVICE_ID install -r build\app\outputs\flutter-apk\app-debug.apk
+adb -s YOUR_DEVICE_ID shell am start -n com.anajak.anajak_travel.preview/com.anajak.anajak_travel.MainActivity
+```
+
+Port 8090 is the local Nginx proxy; use your actual host port if different.
+Keep USB connected. Sign in manually to the local backend in the test copy;
+credentials, drafts and downloads are not copied from the installed app.
+The normal package ID and label stay unchanged when this option is absent,
+and the preview option is rejected for release builds. This test APK is not a
+Play Store update.
+
 Mobile maps now use OpenStreetMap without a key or billing account. See [OPENSTREETMAP_SETUP.md](OPENSTREETMAP_SETUP.md). Google Maps is inactive. Offline downloads do not download map tiles.
 
 ## Architecture

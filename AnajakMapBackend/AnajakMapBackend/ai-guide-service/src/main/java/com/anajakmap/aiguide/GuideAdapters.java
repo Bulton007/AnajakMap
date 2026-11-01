@@ -14,9 +14,10 @@ public class GuideAdapters {
   @ConditionalOnProperty(name = "AI_PROVIDER", havingValue = "gemini")
   GuideProvider gemini(@Value("${GEMINI_API_KEY:}") String key,
       @Value("${GEMINI_MODEL:gemini-3.8-flash}") String model,
-      @Value("${GEMINI_VISION_ENABLED:false}") boolean visionEnabled) {
+      @Value("${GEMINI_VISION_ENABLED:false}") boolean visionEnabled,
+      @Value("${GEMINI_VOICE_ENABLED:false}") boolean voiceEnabled) {
     return new GeminiGuideProvider(key, model,
-        HttpClients.client("https://generativelanguage.googleapis.com", Duration.ofSeconds(45)), visionEnabled);
+        HttpClients.client("https://generativelanguage.googleapis.com", Duration.ofSeconds(45)), visionEnabled, voiceEnabled);
   }
 
   @Bean
@@ -24,6 +25,11 @@ public class GuideAdapters {
   @ConditionalOnProperty(name = "AI_PROVIDER", havingValue = "fixture", matchIfMissing = true)
   GuideProvider mock() {
     return new GuideProvider() {
+      @Override
+      public Map<String, Object> capabilities() {
+        return GuideCapabilities.describe("fixture", false, true, false, false);
+      }
+
       public Result itinerary(
           Map<String, Object> t, Map<String, Object> p, List<Map<String, Object>> places) {
         if (places.isEmpty()) throw new IllegalArgumentException("No grounded places");
@@ -48,7 +54,7 @@ public class GuideAdapters {
       }
 
       public Map<String, Object> perform(String op, Map<String, Object> in) {
-        return switch (op) {
+        Map<String, Object> answer = switch (op) {
           case "translation" ->
               Map.of(
                   "text",
@@ -103,6 +109,8 @@ public class GuideAdapters {
                   "MOCK",
                   "transcript",
                   in.getOrDefault("text", "Development voice transcript"),
+                  "text",
+                  "Development voice answer; no recording was sent to a provider",
                   "mock",
                   true);
           default ->
@@ -112,6 +120,10 @@ public class GuideAdapters {
                   "mock",
                   true);
         };
+        var labeled = new LinkedHashMap<>(answer);
+        labeled.put("mock", true);
+        labeled.put("source", "Development fixture");
+        return labeled;
       }
     };
   }

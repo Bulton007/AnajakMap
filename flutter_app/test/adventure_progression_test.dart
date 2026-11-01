@@ -11,7 +11,16 @@ import 'package:anajak_travel/features/rpg/adventure_controller.dart';
 import 'package:anajak_travel/features/rpg/adventure_repository.dart';
 import 'package:anajak_travel/features/rpg/adventure_management.dart';
 import 'package:anajak_travel/features/rpg/battle_scene.dart';
+import 'package:anajak_travel/features/rpg/rpg_screen.dart'
+    show CreaturePortrait;
 import 'adventure_test.dart' show AdventureFixture, SignedIn, session;
+
+Finder managementScroll() => find
+    .descendant(
+      of: find.byKey(const Key('rpg-management-list')),
+      matching: find.byType(Scrollable),
+    )
+    .first;
 
 class ProgressionFixture extends AdventureFixture {
   @override
@@ -37,6 +46,7 @@ class ProgressionFixture extends AdventureFixture {
       ],
       'achievements': [
         {'id': 'traveler', 'title': 'Traveler', 'unlocked': true},
+        {'id': 'first-win', 'title': 'Trailblazer', 'unlocked': true},
       ],
     });
   }
@@ -64,13 +74,17 @@ void main() {
       expect(find.byType(ExpansionTile), findsNothing);
       await tester.enterText(find.byType(TextField), 'moss');
       await tester.pump();
-      await tester.tap(find.text('Mossling'));
+      await tester.tap(find.text('Lotus Naga'));
       await tester.pumpAndSettle();
-      final evolve = find.widgetWithText(
-        OutlinedButton,
-        'Evolve • Lv 4 • 75 gold',
+      final evolve = find.byKey(const Key('rpg-evolve-owned-1'));
+      await tester.scrollUntilVisible(
+        evolve.hitTestable(),
+        200,
+        scrollable: managementScroll(),
       );
-      await tester.ensureVisible(evolve);
+      await tester.pumpAndSettle();
+      expect(evolve.hitTestable(), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(evolve).onPressed, isNotNull);
       await tester.tap(evolve);
       await tester.pumpAndSettle();
       expect(repo.calls.single.$1, 'practice/monsters/owned-1/evolve');
@@ -96,15 +110,42 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Buy one • 10 gold'));
+      final purchase = find.byKey(const Key('rpg-buy-potion'));
+      await tester.scrollUntilVisible(
+        purchase.hitTestable(),
+        200,
+        scrollable: managementScroll(),
+      );
+      await tester.pumpAndSettle();
+      expect(purchase.hitTestable(), findsOneWidget);
+      expect(tester.widget<FilledButton>(purchase).onPressed, isNotNull);
+      await tester.tap(purchase);
       await tester.pumpAndSettle();
       expect(repo.calls.single.$1, 'practice/inventory/purchase');
       expect(repo.calls.single.$2, {'item': 'potion', 'quantity': 1});
-      await tester.tap(find.text('Achievements'));
+      final achievements = find.text('Achievements');
+      await tester.scrollUntilVisible(
+        achievements.hitTestable(),
+        -200,
+        scrollable: managementScroll(),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Equip'));
+      expect(achievements.hitTestable(), findsOneWidget);
+      await tester.tap(achievements);
+      await tester.pumpAndSettle();
+      final equip = find.byKey(const Key('rpg-equip-first-win'));
+      await tester.scrollUntilVisible(
+        equip.hitTestable(),
+        200,
+        scrollable: managementScroll(),
+      );
+      await tester.pumpAndSettle();
+      expect(equip.hitTestable(), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(equip).onPressed, isNotNull);
+      await tester.tap(equip);
       await tester.pumpAndSettle();
       expect(repo.calls.last.$1, 'practice/title');
+      expect(repo.calls.last.$2, {'id': 'first-win'});
     },
   );
   testWidgets('procedural 3D paints, orbits, animates and falls back', (
@@ -142,7 +183,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('2D fallback'));
     await tester.pumpAndSettle();
-    expect(find.text('2D fallback artwork'), findsOneWidget);
+    expect(find.text('Illustrated view'), findsOneWidget);
+    expect(find.byType(CreaturePortrait), findsOneWidget);
+    expect(
+      tester
+          .widget<FilterChip>(find.widgetWithText(FilterChip, '2D fallback'))
+          .selected,
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
   });
   testWidgets('unknown creature renders safe fallback with reduced motion', (
@@ -157,12 +205,14 @@ void main() {
       MaterialApp(
         home: MediaQuery(
           data: const MediaQueryData(disableAnimations: true),
-          child: Scaffold(body:BattleScene(session: data)),
+          child: Scaffold(body: BattleScene(session: data)),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('2D fallback artwork'), findsOneWidget);
+    expect(find.text('Illustrated view'), findsOneWidget);
+    expect(find.byIcon(Icons.pets), findsOneWidget);
+    expect(find.byType(CreaturePortrait), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

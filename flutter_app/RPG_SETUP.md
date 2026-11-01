@@ -27,6 +27,21 @@ They are unreviewed, with field gameplay disabled. Server practice uses these
 three temple habitats. Beach species are in the bestiary and device practice;
 a server beach destination must be configured before server beach encounters work.
 
+The game entry now offers a visible **Play practice** action when account practice
+is enabled. It selects the first trail unlocked at the player's level, retains the
+server-owned starter companion and asks for an explicit practice acknowledgement.
+When account practice is disabled, **Play on this device** opens the separate local
+temple/beach practice game. Device practice never creates account rewards.
+
+The laptop hosting overlay defaults server practice to disabled and reads an
+explicit `RPG_SIMULATION_ENABLED` setting from the existing private `.env`.
+For local testing, set it true with the existing dev/test profile and recreate
+`discovery-service`; never deploy the dev compose configuration as production.
+Do not approve fixture destinations or bypass GPS checks. The Flutter
+screen explains why field encounters are unavailable instead of leaving only a
+disabled start button. A server cooldown is displayed before another encounter,
+and battle results link to the authoritative collection and confirmed reward history.
+
 ## Run locally
 
 Docker Desktop Linux engine must be running. This session uses port 8088 because
@@ -195,6 +210,18 @@ There are no additional model downloads or external art licenses. Existing fonts
 retain their bundled licenses. New collection details show server-computed stats.
 
 ## Outstanding
+
+The October UI update adds shared responsive card grids and 16dp gaps across
+collection, party, inventory, quests, achievements, the creature guide and reward
+history. Inventory actions align without fixed card heights and stay disabled
+when server-confirmed gold is insufficient. Pending/error/loading states remain
+separate from completed server actions.
+
+Six original Khmer-inspired companions now use different serpent, guardian-lion,
+bird, water-chimera, terrapin and monkey silhouettes in both portraits and 3D.
+English/Khmer display names change; saved species IDs, statistics, encounter
+weights and player progress do not. See [KHMER_CREATURE_ART.md](KHMER_CREATURE_ART.md)
+for the fictional design scope and cultural references.
 
 Rigged production 3D assets, physical-device performance benchmarks, legendary
 species/events, richer status combinations, admin content tools, social features

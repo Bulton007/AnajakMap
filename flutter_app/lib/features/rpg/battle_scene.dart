@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/network/api_client.dart';
 import 'rpg_game.dart';
 import 'rpg_screen.dart';
+import 'creature_catalog.dart';
 
 /// Original procedural meshes, perspective projection and depth-sorted triangles.
 /// This renderer is deliberately separate from combat; it never predicts outcomes.
@@ -70,7 +71,7 @@ class _BattleSceneState extends State<BattleScene>
         Semantics(
           image: true,
           label:
-              '${string(enemy, 'speciesId')} ${widget.session['status']} — procedural 3D battle scene',
+              '${creatureDisplayName(string(enemy, 'speciesId'), language: Localizations.localeOf(context).languageCode)} ${widget.session['status']} — 3D battle scene',
           child: RepaintBoundary(
             child: SizedBox(
               height: 260,
@@ -108,16 +109,13 @@ class _BattleSceneState extends State<BattleScene>
         Text(
           rpgText(
             context,
-            useFallback
-                ? '2D fallback artwork'
-                : 'Procedural 3D • temporary original models • drag to orbit',
-            useFallback
-                ? 'រូបភាពជំនួស 2D'
-                : '3D បង្កើតដោយកូដ • ម៉ូដែលបណ្ដោះអាសន្ន • អូសដើម្បីបង្វិល',
+            useFallback ? 'Illustrated view' : 'Drag to look around',
+            useFallback ? 'ទិដ្ឋភាពរូបគំនូរ' : 'អូសដើម្បីមើលជុំវិញ',
           ),
         ),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: [
             FilterChip(
               label: Text(rpgText(context, '2D fallback', 'ជំនួស 2D')),
@@ -231,14 +229,11 @@ class _ScenePainter extends CustomPainter {
   }
 
   void monster(Json fighter, _V at, double size, bool wild) {
-    final id = string(fighter, 'speciesId');
-    final concept = creatures.where((c) => c.id == id).firstOrNull;
-    final color = HSVColor.fromAHSV(
-      1,
-      (concept?.hue ?? 150).toDouble(),
-      .5,
-      .85,
-    ).toColor();
+    final concept =
+        creatureConcept(string(fighter, 'speciesId')) ?? creatureConcepts.first;
+    final color = Color(concept.color), accent = Color(concept.accent);
+    final dark = Color.lerp(color, const Color(0xff153c35), .32)!;
+    final light = Color.lerp(color, Colors.white, .25)!;
     final evolution = integer(fighter, 'evolution');
     final bob = math.sin(time * math.pi * 2 + (wild ? 0 : 2)) * .045;
     final pulse = math.sin(effect * math.pi);
@@ -249,74 +244,275 @@ class _ScenePainter extends CustomPainter {
         at + _V(wild ? pulse * .07 : pulse * .12, alive ? bob : -.25, 0);
     _V p(double x, double y, double z) =>
         position + _V(x * scale, y * scale, z * scale);
-    sphere(
-      p(0, .55, 0),
-      _V(.46 * scale, (alive ? .55 : .22) * scale, .38 * scale),
-      color,
-    );
-    sphere(
-      p(0, 1.13, -.08),
-      _V(.39 * scale, .32 * scale, .32 * scale),
-      Color.lerp(color, Colors.white, .12)!,
-    );
-    for (final side in [-1.0, 1.0]) {
+    void ball(
+      double x,
+      double y,
+      double z,
+      double rx,
+      double ry,
+      double rz,
+      Color c, {
+      bool small = false,
+    }) {
       sphere(
-        p(side * .2, .13, -.12),
-        _V(.16 * scale, .12 * scale, .23 * scale),
-        color,
+        p(x, y, z),
+        _V(rx * scale, ry * scale, rz * scale),
+        c,
+        rings: small ? 3 : null,
+        segments: small ? 6 : null,
       );
-      sphere(
-        p(side * .15, 1.19, -.36),
-        _V(.08 * scale, .09 * scale, .035 * scale),
-        Colors.white,
-        rings: 3,
-        segments: 6,
-      );
-      sphere(
-        p(side * .15, 1.19, -.39),
-        _V(.035 * scale, .05 * scale, .02 * scale),
-        const Color(0xff102f35),
-        rings: 3,
-        segments: 5,
-      );
-      if (id == 'amberhorn' || id == 'coralclaw') {
-        spike(
-          p(side * .23, 1.35, 0),
-          .11 * scale,
-          .4 * scale,
-          const Color(0xffffd986),
+    }
+
+    void face(double x, double y, double z, {double spread = .13}) {
+      for (final side in [-1.0, 1.0]) {
+        ball(
+          x + side * spread,
+          y,
+          z,
+          .065,
+          .08,
+          .04,
+          Colors.white,
+          small: true,
         );
-      } else if (id == 'moonwarden' || id == 'tidewing') {
-        triangle(
-          p(side * .35, .9, 0),
-          p(side * (.95 + .08 * math.sin(time * math.pi * 2)), 1.2, .1),
-          p(side * .6, .45, .1),
-          Color.lerp(color, Colors.white, .3)!,
+        ball(
+          x + side * spread,
+          y - .005,
+          z - .035,
+          .031,
+          .045,
+          .018,
+          const Color(0xff143b35),
+          small: true,
         );
-        triangle(
-          p(side * .35, .9, 0),
-          p(side * .6, .45, .1),
-          p(side * .48, .45, -.1),
-          color,
-        );
-      } else {
-        spike(
-          p(side * .2, 1.35, .05),
-          .1 * scale,
-          .25 * scale,
-          Color.lerp(color, const Color(0xffa4d378), .5)!,
+        ball(
+          x + side * spread - .012,
+          y + .018,
+          z - .05,
+          .012,
+          .016,
+          .009,
+          Colors.white,
+          small: true,
         );
       }
+      ball(x, y - .12, z - .02, .035, .025, .02, accent, small: true);
+    }
+
+    void fin(
+      double side,
+      double rootY,
+      double tipX,
+      double tipY,
+      double depth,
+      Color c,
+    ) {
+      triangle(
+        p(side * .23, rootY, depth),
+        p(side * tipX, tipY, depth + .06),
+        p(side * .47, rootY - .35, depth),
+        c,
+      );
+      triangle(
+        p(side * .23, rootY, depth),
+        p(side * .47, rootY - .35, depth),
+        p(side * .32, rootY - .25, depth - .1),
+        dark,
+      );
+    }
+
+    switch (concept.design) {
+      case CreatureDesign.snake:
+        // Coiled body and broad cobra-like fan; no arms or legs.
+        ball(0, .17, .1, .62, .16, .42, dark);
+        ball(.2, .28, .1, .43, .13, .31, color);
+        ball(-.18, .38, 0, .33, .13, .23, color);
+        ball(0, .72, -.02, .18, .43, .2, color);
+        ball(0, .76, -.19, .11, .32, .055, accent);
+        triangle(p(0, .78, .05), p(-.57, 1.15, .03), p(-.35, 1.65, .06), dark);
+        triangle(p(0, .78, .05), p(.35, 1.65, .06), p(.57, 1.15, .03), dark);
+        triangle(
+          p(-.1, .85, -.01),
+          p(-.47, 1.15, -.02),
+          p(-.3, 1.5, -.01),
+          accent,
+        );
+        triangle(
+          p(.1, .85, -.01),
+          p(.3, 1.5, -.01),
+          p(.47, 1.15, -.02),
+          accent,
+        );
+        ball(0, 1.27, -.13, .27, .31, .22, light);
+        face(0, 1.31, -.35, spread: .11);
+        for (final x in [-.13, 0.0, .13]) {
+          spike(
+            p(x, 1.53, -.1),
+            .07 * scale,
+            (x == 0 ? 0.22 : 0.15) * scale,
+            accent,
+          );
+        }
+      case CreatureDesign.lion:
+        // Rounded guardian cub, scalloped mane, four paws and curled tail.
+        ball(0, .49, .03, .4, .44, .34, color);
+        for (final side in [-1.0, 1.0]) {
+          ball(side * .28, .12, -.2, .18, .13, .22, light);
+          ball(side * .3, .18, .24, .15, .14, .17, dark);
+        }
+        for (var i = 0; i < 10; i++) {
+          final angle = i * math.pi / 5;
+          ball(
+            math.sin(angle) * .36,
+            1.12 + math.cos(angle) * .34,
+            .015,
+            .19,
+            .19,
+            .2,
+            dark,
+            small: true,
+          );
+        }
+        ball(0, 1.14, -.14, .32, .31, .28, color);
+        ball(0, .99, -.36, .23, .14, .07, accent);
+        for (final side in [-1.0, 1.0]) {
+          ball(side * .26, 1.4, -.15, .12, .13, .1, accent, small: true);
+        }
+        face(0, 1.2, -.4);
+        for (var i = 0; i < 9; i++) {
+          final angle = i * math.pi / 6;
+          ball(
+            .5 + .15 * math.cos(angle),
+            .54 + .23 * math.sin(angle),
+            .21,
+            .065,
+            .07,
+            .07,
+            color,
+            small: true,
+          );
+        }
+        ball(.51, .34, .21, .12, .11, .11, accent, small: true);
+      case CreatureDesign.bird:
+        // Broad layered feather fans, a beak, talons and a long tail.
+        for (final side in [-1.0, 1.0]) {
+          for (var feather = 0; feather < 4; feather++) {
+            fin(
+              side,
+              .94 - feather * .04,
+              1.05 - feather * .13,
+              1.35 - feather * .2,
+              .08 + feather * .02,
+              feather.isEven ? color : light,
+            );
+          }
+          ball(side * .16, .12, -.1, .15, .07, .19, accent, small: true);
+        }
+        for (final x in [-.2, 0.0, .2]) {
+          triangle(
+            p(x, .4, .15),
+            p(x * .7, .06, .49),
+            p(x + .12, .35, .22),
+            dark,
+          );
+        }
+        ball(0, .63, 0, .3, .44, .26, color);
+        ball(0, .65, -.22, .21, .29, .065, light);
+        ball(0, 1.21, -.05, .29, .3, .25, color);
+        face(0, 1.25, -.31, spread: .12);
+        triangle(
+          p(-.1, 1.13, -.31),
+          p(0, .96, -.51),
+          p(.1, 1.13, -.31),
+          accent,
+        );
+        for (final side in [-1.0, 1.0]) {
+          spike(p(side * .18, 1.43, .01), .08 * scale, .26 * scale, accent);
+        }
+      case CreatureDesign.makara:
+        // Low aquatic body, curling elephant-like snout and swept fin tail.
+        ball(.06, .45, .05, .59, .29, .32, color);
+        ball(-.36, .88, -.04, .31, .27, .25, light);
+        face(-.36, .93, -.31, spread: .12);
+        for (var i = 0; i < 9; i++) {
+          final angle = i * math.pi / 7;
+          ball(
+            -.65 - .17 * math.sin(angle),
+            .68 + .19 * math.cos(angle),
+            -.22,
+            .095,
+            .09,
+            .09,
+            color,
+            small: true,
+          );
+        }
+        for (final side in [-1.0, 1.0]) {
+          ball(side * .38, .15, -.12, .22, .08, .17, accent, small: true);
+        }
+        triangle(p(.47, .4, .05), p(.97, 1.1, .1), p(.78, .39, .08), color);
+        triangle(p(.47, .4, .05), p(.78, .39, .08), p(1.0, .14, .12), light);
+        for (var i = 0; i < 4; i++) {
+          spike(p(-.15 + i * .19, .71, .06), .08 * scale, .2 * scale, accent);
+        }
+      case CreatureDesign.turtle:
+        // Flat domed shell, small head, four broad flippers and shell panels.
+        for (final side in [-1.0, 1.0]) {
+          for (final depth in [-.3, .3]) {
+            ball(side * .53, .19, depth, .26, .065, .17, color, small: true);
+          }
+        }
+        ball(0, .42, .02, .58, .27, .53, dark);
+        ball(0, .51, .02, .49, .23, .45, color);
+        ball(0, .5, -.56, .23, .2, .23, light);
+        face(0, .54, -.78, spread: .1);
+        for (var i = 0; i < 6; i++) {
+          final a = i * math.pi / 3, b = (i + 1) * math.pi / 3;
+          triangle(
+            p(0, .755, 0),
+            p(math.cos(a) * .31, .69, math.sin(a) * .28),
+            p(math.cos(b) * .31, .69, math.sin(b) * .28),
+            i.isEven ? accent : light,
+          );
+        }
+        spike(p(0, .46, .48), .07 * scale, .15 * scale, accent);
+      case CreatureDesign.monkey:
+        // Long curling tail, round ears, cheek mask and separate arms.
+        for (var i = 0; i < 12; i++) {
+          final a = i * math.pi / 6;
+          ball(
+            -.49 + .19 * math.cos(a),
+            .69 + .28 * math.sin(a),
+            .22,
+            .065,
+            .065,
+            .065,
+            color,
+            small: true,
+          );
+        }
+        ball(0, .53, .03, .3, .4, .27, color);
+        ball(0, .53, -.23, .17, .27, .055, accent);
+        for (final side in [-1.0, 1.0]) {
+          ball(side * .4, .58, .02, .12, .3, .12, color);
+          ball(side * .42, .35, -.04, .13, .07, .13, accent, small: true);
+          ball(side * .21, .12, -.08, .17, .1, .21, light, small: true);
+          ball(side * .36, 1.15, -.04, .17, .18, .11, color, small: true);
+          ball(side * .36, 1.15, -.13, .1, .11, .04, accent, small: true);
+        }
+        ball(0, 1.15, -.05, .32, .34, .28, color);
+        ball(0, 1.13, -.25, .27, .26, .1, const Color(0xfff4e4c6));
+        face(0, 1.18, -.36, spread: .12);
+        ball(0, 1.43, -.05, .3, .035, .26, accent, small: true);
+        spike(p(0, 1.44, -.05), .09 * scale, .16 * scale, accent);
     }
     if (evolution > 0) {
-      spike(p(0, 1.4, 0), .13 * scale, .25 * scale, const Color(0xffffd986));
+      ball(0, .67, -.4, .09, .12, .045, accent, small: true);
     }
     if (evolution > 1) {
-      sphere(
-        p(0, .7, -.38),
-        _V(.12 * scale, .14 * scale, .06 * scale),
-        const Color(0xffffdf92),
-      );
+      for (final side in [-1.0, 1.0]) {
+        ball(side * .18, .67, -.34, .04, .065, .035, accent, small: true);
+      }
     }
   }
 

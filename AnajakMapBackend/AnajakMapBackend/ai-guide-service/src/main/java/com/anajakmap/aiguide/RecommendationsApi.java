@@ -38,7 +38,10 @@ public class RecommendationsApi {
     limit.check("recommendations:"+jwt.getSubject(),20,60);
     String focus=request.interests().getFirst();
     String term=switch(focus){case "culture"->"temple";case "food"->"restaurant";case "nature"->"park";case "beach"->"beach";default->"";};
-    String query=(term+" "+request.destination().strip()).strip();
+    // Exact destination searches are enriched with geolocated travel sights.
+    // Prefixing "temple" prevents city resolution and can lose all of those
+    // useful culture candidates. Keep focused queries for other interests.
+    String query=(focus.equals("culture")?request.destination().strip():(term+" "+request.destination().strip()).strip());
     Map envelope=discovery.get().uri(b->b.path("/api/v1/discovery/places").queryParam("query",query).queryParam("size",20).build()).header("Authorization",bearer).retrieve().body(Map.class);
     if (envelope==null || !(envelope.get("data") instanceof List<?> raw)) throw new IllegalStateException("Invalid discovery response");
     var candidates=new ArrayList<Map<String,Object>>();
@@ -91,6 +94,10 @@ public class RecommendationsApi {
   }
   static List<Map<String,String>> references(Map<String,Object> place) {
     String id=Objects.toString(place.get("id"),"");
+    if(id.matches("wikipedia:en:[1-9][0-9]*")) {
+      String pageId=id.substring("wikipedia:en:".length());
+      return List.of(Map.of("title","Wikipedia","url","https://en.wikipedia.org/?curid="+pageId,"supports","name_location"));
+    }
     if(!id.matches("osm:[NWR]:[0-9]+"))return List.of();
     String[] parts=id.split(":");
     String type=switch(parts[1]){case "N"->"node";case "W"->"way";default->"relation";};

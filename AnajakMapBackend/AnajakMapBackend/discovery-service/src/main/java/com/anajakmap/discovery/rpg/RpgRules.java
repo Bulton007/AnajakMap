@@ -9,12 +9,12 @@ public final class RpgRules {
   public record Species(String id, String name, String habitat, String element,
                         String rarity, int weight, int hp, int attack, int defense, int speed) {}
   public static final List<Species> SPECIES = List.of(
-      new Species("mossling","Mossling","temple","earth","Common",60,60,16,10,12),
-      new Species("amberhorn","Amberhorn","temple","fire","Rare",30,70,19,12,10),
-      new Species("moonwarden","Moonwarden","temple","water","Epic",10,80,21,14,15),
-      new Species("bubblefin","Bubblefin","beach","water","Common",60,60,16,10,12),
-      new Species("coralclaw","Coralclaw","beach","fire","Rare",30,70,19,12,10),
-      new Species("tidewing","Tidewing","beach","earth","Epic",10,80,21,14,15));
+      new Species("mossling","Lotus Naga","temple","earth","Common",60,60,16,10,12),
+      new Species("amberhorn","Dawn Singha","temple","fire","Rare",30,70,19,12,10),
+      new Species("moonwarden","Moon Krut","temple","water","Epic",10,80,21,14,15),
+      new Species("bubblefin","River Makara","beach","water","Common",60,60,16,10,12),
+      new Species("coralclaw","Coral Terrapin","beach","fire","Rare",30,70,19,12,10),
+      new Species("tidewing","Cloud Vanara","beach","earth","Epic",10,80,21,14,15));
   public static Species species(String id) {
     return SPECIES.stream().filter(s -> s.id.equals(id)).findFirst().orElseThrow(IllegalArgumentException::new);
   }

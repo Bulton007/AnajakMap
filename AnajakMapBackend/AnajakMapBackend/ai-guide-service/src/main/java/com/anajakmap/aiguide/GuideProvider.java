@@ -26,7 +26,9 @@ public interface GuideProvider {
   Map<String, Object> perform(String operation, Map<String, Object> input);
 
   default Map<String, Object> capabilities() {
-    return Map.of("vision", false, "voice", false);
+    // Adapter credentials are required at startup. Its media operations have
+    // no negotiated contract, so keep those unavailable until implemented.
+    return GuideCapabilities.describe("adapter", true, false, false, false);
   }
 
   default List<Map<String,Object>> recommend(List<Map<String,Object>> places, List<String> interests, String language) {

@@ -4,8 +4,13 @@ import '../../app/localization/strings.dart';
 
 /// Absolute server expiry survives backgrounding; never grants rewards locally.
 class EncounterCountdown extends StatefulWidget {
-  const EncounterCountdown({super.key, required this.expiresAt});
+  const EncounterCountdown({
+    super.key,
+    required this.expiresAt,
+    this.cooldown = false,
+  });
   final String expiresAt;
+  final bool cooldown;
   @override
   State<EncounterCountdown> createState() => _CountdownState();
 }
@@ -46,8 +51,16 @@ class _CountdownState extends State<EncounterCountdown>
   @override
   Widget build(BuildContext context) {
     final end = DateTime.tryParse(widget.expiresAt);
-    final seconds = end == null ? 0 : end.difference(DateTime.now()).inSeconds;
-    final label = seconds <= 0
+    final seconds = end == null
+        ? 0
+        : (end.difference(DateTime.now()).inMilliseconds / 1000).ceil();
+    final label = widget.cooldown
+        ? seconds <= 0
+              ? (context.isKhmer
+                    ? 'អាចជួបសត្វថ្មីបានហើយ។'
+                    : 'Ready for another encounter.')
+              : '${context.isKhmer ? 'ការជួបបន្ទាប់ក្នុង' : 'Next encounter in'} ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}'
+        : seconds <= 0
         ? (context.isKhmer
               ? 'ការជួបនេះផុតកំណត់ហើយ។ ផ្ទុកឡើងវិញដើម្បីបន្ត។'
               : 'Encounter expired. Refresh before continuing.')

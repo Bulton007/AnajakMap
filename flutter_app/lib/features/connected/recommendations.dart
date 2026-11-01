@@ -15,6 +15,31 @@ import '../../shared/models/server_models.dart';
 import 'connected_explore.dart';
 import 'connected_generation.dart';
 
+/// Open only server-supported reference destinations; never arbitrary model links.
+Uri? recommendationReferenceUri(String value) {
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasPort ||
+      uri.hasFragment) {
+    return null;
+  }
+  if (uri.host == 'www.openstreetmap.org' &&
+      !uri.hasQuery &&
+      RegExp(r'^/(node|way|relation)/[0-9]+$').hasMatch(uri.path)) {
+    return uri;
+  }
+  if (uri.host == 'en.wikipedia.org' &&
+      uri.path == '/' &&
+      uri.queryParametersAll.length == 1 &&
+      uri.queryParametersAll['curid']?.length == 1 &&
+      RegExp(r'^[1-9][0-9]*$').hasMatch(uri.queryParameters['curid'] ?? '')) {
+    return uri;
+  }
+  return null;
+}
+
 class TripRecommendations extends ConsumerStatefulWidget {
   const TripRecommendations({super.key, required this.profile});
   final Json profile;
@@ -30,6 +55,7 @@ class _RecommendationsState extends ConsumerState<TripRecommendations> {
   List<Json> items = [];
   String? error;
   bool busy = false;
+  bool aiAssisted = true;
   int revision = 0;
   @override
   void dispose() {
@@ -47,8 +73,9 @@ class _RecommendationsState extends ConsumerState<TripRecommendations> {
     });
   }
 
-  Future<void> find({bool useAi = false}) async {
+  Future<void> find({bool? useAi}) async {
     if (busy) return;
+    final askAi = useAi ?? aiAssisted;
     final query = destination.text.trim();
     if (query.length < 2 || query.length > 120) {
       setState(() => error = context.t('recommendDestinationRequired'));
@@ -58,7 +85,7 @@ class _RecommendationsState extends ConsumerState<TripRecommendations> {
     setState(() {
       busy = true;
       error = null;
-      if (!useAi) {
+      if (useAi == null) {
         result = null;
         items = [];
       }
@@ -69,7 +96,7 @@ class _RecommendationsState extends ConsumerState<TripRecommendations> {
         'interests': [interest],
         'pace': pace,
         'language': context.isKhmer ? 'km' : 'en',
-        'useAi': useAi,
+        'useAi': askAi,
       });
       if (!mounted || version != revision) return;
       setState(() {
@@ -263,6 +290,28 @@ class _RecommendationsState extends ConsumerState<TripRecommendations> {
           ],
         ),
         const SizedBox(height: 20),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.auto_awesome_rounded),
+          title: Text(
+            context.isKhmer
+                ? 'ឱ្យ AI ជ្រើសរើស និងពន្យល់'
+                : 'Let AI choose & explain',
+          ),
+          subtitle: Text(
+            context.isKhmer
+                ? 'បិទដើម្បីផ្គូផ្គងតាមចំណូលចិត្ត'
+                : 'Turn off for preference matching',
+          ),
+          value: aiAssisted,
+          onChanged: busy
+              ? null
+              : (value) {
+                  clearResults();
+                  setState(() => aiAssisted = value);
+                },
+        ),
+        const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: busy ? null : find,
           icon: const Icon(Icons.explore_outlined),
@@ -472,12 +521,10 @@ class RecommendationCard extends StatelessWidget {
                     for (final source in objects(place['references']))
                       TextButton.icon(
                         onPressed: () async {
-                          final uri = Uri.tryParse(string(source, 'url'));
-                          if (uri == null ||
-                              uri.scheme != 'https' ||
-                              uri.host != 'www.openstreetmap.org') {
-                            return;
-                          }
+                          final uri = recommendationReferenceUri(
+                            string(source, 'url'),
+                          );
+                          if (uri == null) return;
                           final opened = await launchUrl(
                             uri,
                             mode: LaunchMode.externalApplication,

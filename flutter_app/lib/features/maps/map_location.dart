@@ -6,6 +6,23 @@ class MapLocationIssue implements Exception {
   final String kind;
 }
 
+Position validatedMapPosition(Position value, {DateTime? now}) {
+  final age = (now ?? DateTime.now()).difference(value.timestamp);
+  if (!value.latitude.isFinite ||
+      !value.longitude.isFinite ||
+      value.latitude.abs() > 90 ||
+      value.longitude.abs() > 180 ||
+      !value.accuracy.isFinite ||
+      value.accuracy < 0) {
+    throw const MapLocationIssue('invalid');
+  }
+  if (age > const Duration(minutes: 2) || age < const Duration(minutes: -1)) {
+    throw const MapLocationIssue('stale');
+  }
+  if (value.accuracy > 1000) throw const MapLocationIssue('accuracy');
+  return value;
+}
+
 abstract class MapLocationAccess {
   Future<Position> current({bool requestPermission = true});
   Stream<Position> watch();
@@ -32,10 +49,12 @@ class _DeviceLocation implements MapLocationAccess {
     if (permission == LocationPermission.denied) {
       throw const MapLocationIssue('denied');
     }
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 20),
+    return validatedMapPosition(
+      await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
       ),
     );
   }

@@ -42,10 +42,10 @@ public class TripApi {
       @NotNull Instant endsAt,
       @DecimalMin("-90") @DecimalMax("90") double latitude,
       @DecimalMin("-180") @DecimalMax("180") double longitude,
-      @NotBlank String source) {}
+      @NotBlank @Size(max = 500) String source) {}
 
   public record Draft(
-      @NotEmpty @Size(max = 100) List<@Valid Activity> activities, @NotBlank String source) {}
+      @NotEmpty @Size(max = 100) List<@Valid Activity> activities, @NotBlank @Size(max = 500) String source) {}
 
   public record Approve(@NotBlank String itineraryId, long version, Long baseVersion) {}
 

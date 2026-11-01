@@ -11,6 +11,7 @@ import '../../shared/components/remote.dart';
 import '../../shared/components/travel_panels.dart';
 import '../../shared/models/server_models.dart';
 import 'connected_trips.dart';
+import 'itinerary_activity_card.dart';
 
 class ConnectedGeneration extends ConsumerStatefulWidget {
   const ConnectedGeneration({
@@ -77,7 +78,9 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
     });
     try {
       final repo = ref.read(repositoryProvider);
-      reservations = await repo.reservations(widget.trip.id);
+      // A new itinerary does not need the reservations service. For a replan,
+      // load reservations so the review can display existing commitments.
+      if (widget.replan) reservations = await repo.reservations(widget.trip.id);
       final result = await repo.generate(
         widget.trip.id,
         object((await repo.profile())['preferences']),
@@ -463,49 +466,43 @@ class _GenerationState extends ConsumerState<ConnectedGeneration> {
             ],
             Section(context.t('after')),
             for (var i = 0; i < activities.length; i++)
-              Card(
-                child: CheckboxListTile(
-                  value: selected.contains(i),
-                  onChanged: busy || completed || approvalStarted
-                      ? null
-                      : (v) => setState(
-                          () => v! ? selected.add(i) : selected.remove(i),
-                        ),
-                  title: Text(activities[i].title),
-                  secondary: IconButton(
-                    tooltip: context.t('edit'),
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: busy || completed || approvalStarted
-                        ? null
-                        : () async {
-                            final a = activities[i];
-                            final edited = await remoteForm(context, 'edit', [
-                              InputSpec('title', initial: a.title),
-                              InputSpec(
-                                'startsAt',
-                                initial: a.startsAt,
-                                kind: InputKind.instant,
-                              ),
-                              InputSpec(
-                                'endsAt',
-                                initial: a.endsAt,
-                                kind: InputKind.instant,
-                              ),
-                            ]);
-                            if (edited is Map && mounted) {
-                              setState(
-                                () => activities[i] = ServerActivity.fromJson({
-                                  ...a.toDraft(),
-                                  ...object(edited),
-                                }),
-                              );
-                            }
-                          },
-                  ),
-                  subtitle: Text(
-                    '${travelTimeRange(activities[i].startsAt, activities[i].endsAt, zone: widget.trip.timezone, locale: context.isKhmer ? 'km' : 'en')}\n${activities[i].source}',
-                  ),
-                ),
+              ItineraryActivityCard(
+                activity: activities[i],
+                zone: widget.trip.timezone,
+                order: i,
+                selected: selected.contains(i),
+                onSelected: busy || completed || approvalStarted
+                    ? null
+                    : (v) => setState(
+                        () => v ? selected.add(i) : selected.remove(i),
+                      ),
+                showEdit: true,
+                onEdit: busy || completed || approvalStarted
+                    ? null
+                    : () async {
+                        final a = activities[i];
+                        final edited = await remoteForm(context, 'edit', [
+                          InputSpec('title', initial: a.title),
+                          InputSpec(
+                            'startsAt',
+                            initial: a.startsAt,
+                            kind: InputKind.instant,
+                          ),
+                          InputSpec(
+                            'endsAt',
+                            initial: a.endsAt,
+                            kind: InputKind.instant,
+                          ),
+                        ]);
+                        if (edited is Map && mounted) {
+                          setState(
+                            () => activities[i] = ServerActivity.fromJson({
+                              ...a.toDraft(),
+                              ...object(edited),
+                            }),
+                          );
+                        }
+                      },
               ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -563,20 +560,6 @@ class _Activity extends StatelessWidget {
   final String zone;
   final ServerActivity activity;
   @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(bottom: 12),
-    child: ListTile(
-      contentPadding: const EdgeInsets.all(16),
-      leading: const Icon(Icons.schedule_rounded),
-      title: Text(activity.title),
-      subtitle: Text(
-        travelTimeRange(
-          activity.startsAt,
-          activity.endsAt,
-          zone: zone,
-          locale: context.isKhmer ? 'km' : 'en',
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      ItineraryActivityCard(activity: activity, zone: zone);
 }

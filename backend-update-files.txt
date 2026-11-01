@@ -3,18 +3,34 @@ AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/a
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/GuideAdapters.java
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/GuideApi.java
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/GuideProvider.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/GuideResponseValidation.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/ItineraryConstraints.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/RecommendationsApi.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/VoiceAudio.java
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/ConversationContextTest.java
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/GeminiGuideProviderTest.java
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/GeminiVisionTest.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/GeminiVoiceTest.java
 AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/GuideChatPrivacyTest.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/GuideMediaPrivacyTest.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/ItineraryConstraintsTest.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/RecommendationsTest.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/VoiceAudioTest.java
+AnajakMapBackend/AnajakMapBackend/.env.example
+AnajakMapBackend/AnajakMapBackend/compose.laptop.yml
 AnajakMapBackend/AnajakMapBackend/compose.local.yml
 AnajakMapBackend/AnajakMapBackend/deploy/laptop/README.md
 AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/DestinationWeather.java
 AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/DiscoveryApi.java
 AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/OsrmRoutes.java
+AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/PlacePhotos.java
+AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/TravelPlaces.java
 AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/rpg/RpgService.java
+AnajakMapBackend/AnajakMapBackend/discovery-service/src/main/java/com/anajakmap/discovery/rpg/RpgRules.java
 AnajakMapBackend/AnajakMapBackend/discovery-service/src/test/java/com/anajakmap/discovery/DestinationWeatherTest.java
 AnajakMapBackend/AnajakMapBackend/discovery-service/src/test/java/com/anajakmap/discovery/OsrmRoutesTest.java
+AnajakMapBackend/AnajakMapBackend/discovery-service/src/test/java/com/anajakmap/discovery/PlacePhotosTest.java
+AnajakMapBackend/AnajakMapBackend/discovery-service/src/test/java/com/anajakmap/discovery/TravelPlacesTest.java
 AnajakMapBackend/AnajakMapBackend/expense-service/src/main/java/com/anajakmap/expense/CurrencyApi.java
 AnajakMapBackend/AnajakMapBackend/expense-service/src/test/java/com/anajakmap/expense/CurrencyApiTest.java
 AnajakMapBackend/AnajakMapBackend/scripts/configure-gmail.ps1
@@ -26,8 +42,40 @@ AnajakMapBackend/AnajakMapBackend/scripts/update-app-backend.ps1
 Update App Backend.cmd
 APP_UPDATE_SETUP.md
 APP_AUDIT.md
+ROUTING_SETUP.md
+DEVICE_TEST_REPORT.md
 AnajakMapBackend/AnajakMapBackend/scripts/backend-update-install.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/backend-readiness.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/test-backend-readiness.ps1
 AnajakMapBackend/AnajakMapBackend/scripts/test-update-installer.ps1
 backend-update-files.txt
+HOME_SERVER_URL_SETUP.md
+Configure Ngrok.cmd
+Start Public Backend.cmd
+AnajakMapBackend/AnajakMapBackend/scripts/ngrok-command.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/configure-ngrok.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/start-ngrok.ps1
+Recover Backend Config.cmd
+RECOVER_BACKEND_CONFIG.md
+AnajakMapBackend/AnajakMapBackend/scripts/env-recovery.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/recover-env.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/test-env-recovery.ps1
+Check AI.cmd
+Update AI.cmd
+AI_DIAGNOSTICS.md
+AI_SETUP_REPAIR.md
+AnajakMapBackend/AnajakMapBackend/scripts/ai-diagnostics.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/ai-settings.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/check-ai.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/test-ai-diagnostics.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/test-ai-update-environment.ps1
+AnajakMapBackend/AnajakMapBackend/scripts/test-ai-settings.ps1
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/GuideCapabilities.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/InvalidGuideResponseException.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/main/java/com/anajakmap/aiguide/JobWorker.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/GuideCapabilitiesTest.java
+AnajakMapBackend/AnajakMapBackend/ai-guide-service/src/test/java/com/anajakmap/aiguide/JobWorkerRetryTest.java
+AnajakMapBackend/AnajakMapBackend/trip-service/src/main/java/com/anajakmap/trip/TripApi.java
+AnajakMapBackend/AnajakMapBackend/trip-service/src/main/resources/db/migration/V4__unicode_trip_text.sql
+AnajakMapBackend/AnajakMapBackend/trip-service/src/test/java/com/anajakmap/trip/TripUnicodeValidationTest.java
+AnajakMapBackend/AnajakMapBackend/trip-service/src/test/java/com/anajakmap/trip/OracleUnicodeTripTest.java

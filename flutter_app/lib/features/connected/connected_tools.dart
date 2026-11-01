@@ -16,6 +16,8 @@ import '../../shared/components/travel_alerts.dart';
 import 'connected_explore.dart';
 import 'connected_generation.dart';
 import 'recommendations.dart';
+import 'voice_assistance.dart';
+import 'ai_service_status.dart';
 
 class ConnectedTools extends ConsumerStatefulWidget {
   const ConnectedTools({
@@ -63,6 +65,34 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
     'members': await repo.members(tripId),
     'locations': await repo.locations(tripId),
   };
+
+  String _memberName(Json member, int index) {
+    if (string(member, 'accountId') == widget.profile['id']) {
+      final ownName = string(widget.profile, 'name');
+      if (ownName.isNotEmpty) return ownName;
+    }
+    for (final key in ['displayName', 'name', 'fullName', 'email']) {
+      final value = string(member, key).trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '${context.isKhmer ? 'សមាជិក' : 'Traveler'} ${index + 1}';
+  }
+
+  String _equalShare(String amount, int count, int index) {
+    final normalized = decimalAmount(amount);
+    final parts = normalized.split('.');
+    final cents =
+        BigInt.parse(parts.first) * BigInt.from(100) +
+        BigInt.parse(
+          (parts.length > 1 ? parts[1] : '').padRight(2, '0').substring(0, 2),
+        );
+    final divisor = BigInt.from(count);
+    final share =
+        cents ~/ divisor +
+        (BigInt.from(index) < cents % divisor ? BigInt.one : BigInt.zero);
+    return '${share ~/ BigInt.from(100)}.${(share % BigInt.from(100)).toString().padLeft(2, '0')}';
+  }
+
   Future<void> form(
     String title,
     List<InputSpec> fields,
@@ -84,7 +114,6 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
       kind: InputKind.instant,
       initial: '${widget.trip!.startDate}T10:00:00+07:00',
     ),
-    InputSpec('timezone', initial: widget.trip!.timezone),
   ];
   Future<void> expense({Json? extraction, String? receipt}) async {
     final members = await runRequest(context, () => repo.members(tripId));
@@ -103,15 +132,14 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
           initial: string(extraction ?? {}, 'currency', 'USD'),
           choices: const ['USD', 'KHR', 'EUR'],
         ),
-        for (final m in members)
+        for (final (index, m) in members.indexed)
           InputSpec(
             'split_${string(m, 'accountId')}',
-            label: '${context.t('splitAmount')} · ${string(m, 'accountId')}',
+            label:
+                '${context.isKhmer ? 'ចំណែក' : 'Share'} · ${_memberName(m, index)}',
             kind: InputKind.amount,
             optional: true,
-            initial: string(m, 'accountId') == widget.profile['id']
-                ? amount
-                : '',
+            initial: _equalShare(amount, members.length, index),
           ),
       ],
       (body, key) async {
@@ -180,9 +208,14 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
           ),
       ],
       (body, key) => document == null
-          ? repo.manualReservation({'tripId': tripId, ...body}, key)
+          ? repo.manualReservation({
+              'tripId': tripId,
+              ...body,
+              'timezone': widget.trip!.timezone,
+            }, key)
           : repo.confirmReservation(string(document, 'documentId'), {
               ...body,
+              'timezone': widget.trip!.timezone,
               'version': integer(document, 'version'),
             }),
       notice: context.t('reviewBeforeSave'),
@@ -280,7 +313,7 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
     refresh();
   }
 
-  Widget action(String label, VoidCallback run, {IconData icon = Icons.add}) =>
+  Widget action(String label, VoidCallback? run, {IconData icon = Icons.add}) =>
       Padding(
         padding: const EdgeInsets.only(right: 8, bottom: 10),
         child: OutlinedButton.icon(
@@ -325,7 +358,13 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                 action('addExpense', () => expense()),
                 action(
                   'scanExpense',
-                  receipt,
+                  ref
+                              .watch(guideCapabilitiesProvider)
+                              .asData
+                              ?.value['receipt'] ==
+                          true
+                      ? receipt
+                      : null,
                   icon: Icons.document_scanner_outlined,
                 ),
                 action(
@@ -394,7 +433,17 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
               ],
               if (widget.tool == 'reservations') ...[
                 action('addReservation', () => reservation()),
-                action('extraction', extractBooking, icon: Icons.upload_file),
+                action(
+                  'extraction',
+                  ref
+                              .watch(guideCapabilitiesProvider)
+                              .asData
+                              ?.value['reservation'] ==
+                          true
+                      ? extractBooking
+                      : null,
+                  icon: Icons.upload_file,
+                ),
               ],
               if (widget.tool == 'group') ...[
                 action(
@@ -402,7 +451,12 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                   () => form(
                     'inviteMember',
                     [
-                      const InputSpec('accountId'),
+                      InputSpec(
+                        'accountId',
+                        label: context.isKhmer
+                            ? 'លេខគណនីអ្នកធ្វើដំណើរ'
+                            : 'Traveler account code',
+                      ),
                       const InputSpec(
                         'role',
                         initial: 'VIEWER',
@@ -410,6 +464,9 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                       ),
                     ],
                     (b, _) => repo.invite(tripId, b['accountId'], b['role']),
+                    notice: context.isKhmer
+                        ? 'ការអញ្ជើញតាម API បច្ចុប្បន្នត្រូវការលេខគណនី Anajak របស់អ្នកធ្វើដំណើរ។'
+                        : 'The current invitation API requires the traveler’s Anajak account code.',
                   ),
                 ),
                 action(
@@ -438,10 +495,14 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
               if (widget.tool == 'calendar') ...[
                 action(
                   'addEvent',
-                  () => form('addEvent', [
-                    const InputSpec('title'),
-                    ...times(),
-                  ], (b, _) => repo.event(tripId, b)),
+                  () => form(
+                    'addEvent',
+                    [const InputSpec('title'), ...times()],
+                    (b, _) => repo.event(tripId, {
+                      ...b,
+                      'timezone': widget.trip!.timezone,
+                    }),
+                  ),
                 ),
                 action('syncCalendar', () async {
                   if (await confirmDialog(
@@ -450,10 +511,26 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                         context.t('confirm'),
                       ) &&
                       context.mounted) {
-                    await runRequest(
+                    final result = await runRequest(
                       context,
                       () => repo.syncCalendar(tripId, ApiClient.operationId()),
                     );
+                    if (result != null && context.mounted) {
+                      final mocked =
+                          string(object(result), 'status') == 'MOCK_SYNCED' ||
+                          object(result)['mock'] == true;
+                      await inform(
+                        context,
+                        context.t('syncCalendar'),
+                        mocked
+                            ? (context.isKhmer
+                                  ? 'ការសាកល្បងប៉ុណ្ណោះ៖ មិនមានការផ្លាស់ប្តូរក្នុងប្រតិទិនខាងក្រៅទេ។'
+                                  : 'Test simulation only: no external calendar was changed.')
+                            : (context.isKhmer
+                                  ? 'បានផ្ញើសំណើសមកាលកម្មទៅសេវាប្រតិទិន។'
+                                  : 'The calendar sync request was accepted by the configured provider.'),
+                      );
+                    }
                     refresh();
                   }
                 }),
@@ -469,15 +546,22 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
               if (widget.tool == 'transport')
                 action(
                   'addJourney',
-                  () => form('addJourney', [
-                    const InputSpec('origin'),
-                    const InputSpec('destination'),
-                    const InputSpec('departure', kind: InputKind.instant),
-                    const InputSpec('arrival', kind: InputKind.instant),
-                    InputSpec('timezone', initial: widget.trip!.timezone),
-                    const InputSpec('transferDetails'),
-                    const InputSpec('source'),
-                  ], (b, _) => repo.saveJourney({'tripId': tripId, ...b})),
+                  () => form(
+                    'addJourney',
+                    [
+                      const InputSpec('origin'),
+                      const InputSpec('destination'),
+                      const InputSpec('departure', kind: InputKind.instant),
+                      const InputSpec('arrival', kind: InputKind.instant),
+                      const InputSpec('transferDetails'),
+                      const InputSpec('source'),
+                    ],
+                    (b, _) => repo.saveJourney({
+                      'tripId': tripId,
+                      ...b,
+                      'timezone': widget.trip!.timezone,
+                    }),
+                  ),
                 ),
               if (widget.tool == 'notifications')
                 action(
@@ -489,6 +573,26 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                 ),
             ],
           ),
+          if ((widget.tool == 'expenses' &&
+                  ref
+                          .watch(guideCapabilitiesProvider)
+                          .asData
+                          ?.value['receipt'] !=
+                      true) ||
+              (widget.tool == 'reservations' &&
+                  ref
+                          .watch(guideCapabilitiesProvider)
+                          .asData
+                          ?.value['reservation'] !=
+                      true)) ...[
+            Notice(
+              context.isKhmer
+                  ? 'ការអានឯកសារដោយ AI មិនទាន់បានកំណត់រចនាសម្ព័ន្ធទេ។ អ្នកអាចបញ្ចូលព័ត៌មានដោយខ្លួនឯងបាន។'
+                  : 'AI document scanning is not configured yet. You can add the details manually.',
+              icon: Icons.edit_note_rounded,
+            ),
+            const SizedBox(height: 12),
+          ],
           if (widget.tool == 'notifications') Notice(context.t('pushSetup')),
           if (widget.tool == 'journal') ...[
             for (final entry in objects(data))
@@ -551,6 +655,85 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
             if (objects(data).isEmpty) Text(context.t('empty')),
           ] else if (widget.tool == 'calendar') ...[
             CalendarPanel(data: object(data), zone: widget.trip!.timezone),
+          ] else if (widget.tool == 'group') ...[
+            Section(context.isKhmer ? 'សមាជិកដំណើរ' : 'Trip members'),
+            for (final (index, member) in objects(
+              object(data)['members'],
+            ).indexed)
+              Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  leading: CircleAvatar(child: Text('${index + 1}')),
+                  title: Text(_memberName(member, index)),
+                  subtitle: Text(switch (string(member, 'role').toUpperCase()) {
+                    'OWNER' =>
+                      context.isKhmer
+                          ? 'ម្ចាស់ · គ្រប់គ្រងដំណើរ និងសមាជិក'
+                          : 'Owner · manages trip and members',
+                    'EDITOR' =>
+                      context.isKhmer
+                          ? 'អ្នកកែសម្រួល · អាចកែប្រែដំណើរ'
+                          : 'Editor · can change trip details',
+                    _ =>
+                      context.isKhmer
+                          ? 'អ្នកមើល · មើលព័ត៌មានដំណើរ'
+                          : 'Viewer · can view trip details',
+                  }),
+                  trailing: string(member, 'role') == 'OWNER'
+                      ? const Icon(Icons.workspace_premium_outlined)
+                      : IconButton(
+                          tooltip: context.t('removeMember'),
+                          onPressed: () async {
+                            final name = _memberName(member, index);
+                            if (await confirmDialog(
+                                  context,
+                                  context.t('removeMember'),
+                                  name,
+                                ) &&
+                                context.mounted) {
+                              await runRequest(
+                                context,
+                                () => repo.removeMember(
+                                  tripId,
+                                  string(member, 'accountId'),
+                                ),
+                              );
+                              refresh();
+                            }
+                          },
+                          icon: const Icon(Icons.person_remove_alt_1_outlined),
+                        ),
+                ),
+              ),
+            if (objects(object(data)['members']).isEmpty)
+              VisualEmpty(
+                icon: Icons.people_outline,
+                title: context.t('empty'),
+              ),
+            Section(context.isKhmer ? 'ការចែករំលែកទីតាំង' : 'Location sharing'),
+            if (objects(object(data)['locations']).isEmpty)
+              VisualEmpty(
+                icon: Icons.location_disabled_outlined,
+                title: context.isKhmer
+                    ? 'មិនមានទីតាំងកំពុងចែករំលែកទេ'
+                    : 'No locations are being shared',
+              ),
+            if (objects(object(data)['locations']).isNotEmpty)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.my_location),
+                  title: Text(
+                    context.isKhmer
+                        ? 'អ្នកធ្វើដំណើរ ${objects(object(data)['locations']).length} នាក់កំពុងចែករំលែកទីតាំង'
+                        : '${objects(object(data)['locations']).length} travelers are sharing locations',
+                  ),
+                  subtitle: Text(
+                    context.isKhmer
+                        ? 'អ្នកចែករំលែក និងសមាជិកដំណើរអាចមើលទីតាំងរហូតដល់ផុតកំណត់។'
+                        : 'Shared locations are visible to trip members until they expire.',
+                  ),
+                ),
+              ),
           ] else if (widget.tool == 'contacts') ...[
             if (objects(data).isEmpty) Text(context.t('empty')),
             for (final contact in objects(data))
@@ -565,31 +748,6 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
             const SizedBox(height: 16),
             ServerResult(data),
           ],
-          if (widget.tool == 'group')
-            for (final member in objects(object(data)['members']))
-              if (string(member, 'role') != 'OWNER')
-                TextButton(
-                  onPressed: () async {
-                    if (await confirmDialog(
-                          context,
-                          context.t('removeMember'),
-                          string(member, 'accountId'),
-                        ) &&
-                        context.mounted) {
-                      await runRequest(
-                        context,
-                        () => repo.removeMember(
-                          tripId,
-                          string(member, 'accountId'),
-                        ),
-                      );
-                      refresh();
-                    }
-                  },
-                  child: Text(
-                    '${context.t('removeMember')}: ${string(member, 'accountId')}',
-                  ),
-                ),
           if ([
             'expenses',
             'reservations',
@@ -657,7 +815,7 @@ class CompanionTasks extends ConsumerWidget {
         icon: Icons.auto_awesome,
       ),
       const SizedBox(height: 16),
-      Notice(context.t('aiTrustBody')),
+      const AiServiceStatus(),
       const SizedBox(height: 20),
       VisualActions(
         children: [
@@ -679,25 +837,29 @@ class CompanionTasks extends ConsumerWidget {
               icon: featureIcon(task),
               label: context.t(task),
               subtitle:
-                  task == 'voice' ||
-                      (task == 'vision' &&
-                          ref
-                                  .watch(guideCapabilitiesProvider)
-                                  .asData
-                                  ?.value['vision'] !=
-                              true)
-                  ? (Localizations.localeOf(context).languageCode == 'km'
-                        ? 'មិនទាន់មាននៅឡើយ'
-                        : 'Not available yet')
+                  ((task == 'voice' || task == 'vision') &&
+                      ref
+                              .watch(guideCapabilitiesProvider)
+                              .asData
+                              ?.value[task] !=
+                          true)
+                  ? (ref.watch(guideCapabilitiesProvider).isLoading
+                        ? (context.isKhmer ? 'កំពុងពិនិត្យ…' : 'Checking…')
+                        : ref.watch(guideCapabilitiesProvider).hasError
+                        ? (context.isKhmer
+                              ? 'សូមពិនិត្យការតភ្ជាប់'
+                              : 'Check connection above')
+                        : (context.isKhmer
+                              ? 'មិនទាន់មាននៅឡើយ'
+                              : 'Not available yet'))
                   : null,
               onTap:
-                  task == 'voice' ||
-                      (task == 'vision' &&
-                          ref
-                                  .watch(guideCapabilitiesProvider)
-                                  .asData
-                                  ?.value['vision'] !=
-                              true)
+                  ((task == 'voice' || task == 'vision') &&
+                      ref
+                              .watch(guideCapabilitiesProvider)
+                              .asData
+                              ?.value[task] !=
+                          true)
                   ? null
                   : () async {
                       if (task == 'generate') {
@@ -737,176 +899,191 @@ class _AssistanceState extends ConsumerState<AssistanceTask> {
   bool submitting = false;
   String? conversationId;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(context.t(widget.task))),
-    body: PageBody(
-      children: [
-        TravelHero(
-          title: context.t(widget.task),
-          subtitle: context.t(
-            widget.task == 'translate' ? 'translateBody' : 'aiSubtitle',
-          ),
-          icon: featureIcon(widget.task),
-        ),
-        Notice(context.t('aiTrustBody')),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: submitting
-              ? null
-              : () async {
-                  final repo = ref.read(repositoryProvider);
-                  if (widget.task == 'vision' || widget.task == 'voice') {
-                    if (submitting) return;
-                    setState(() => submitting = true);
-                    if (widget.task == 'vision') {
-                      final consent = await showDialog<bool>(
-                        context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          title: Text(
-                            context.isKhmer
-                                ? 'ចែករំលែករូបថតជាមួយ AI?'
-                                : 'Share a photo with AI?',
-                          ),
-                          content: Text(
-                            context.isKhmer
-                                ? 'រូបថតដែលអ្នកជ្រើសរើស និងទិន្នន័យភ្ជាប់របស់វា នឹងផ្ញើទៅម៉ាស៊ីនមេ និង Google Gemini។ ជៀសវាងមុខមនុស្ស ឯកសារឯកជន និងព័ត៌មានរសើប។ លទ្ធផលអាចខុស។'
-                                : 'Your selected photo, including any embedded metadata, will be uploaded to our backend and Google Gemini. Avoid faces, private documents and sensitive information. Recognition can be wrong.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, false),
-                              child: Text(context.t('cancel')),
-                            ),
-                            FilledButton(
-                              onPressed: () =>
-                                  Navigator.pop(dialogContext, true),
-                              child: Text(
-                                context.isKhmer
-                                    ? 'យល់ព្រម និងជ្រើសរូបថត'
-                                    : 'Agree and choose photo',
+  Widget build(BuildContext context) => widget.task == 'voice'
+      ? const VoiceAssistanceScreen()
+      : Scaffold(
+          appBar: AppBar(title: Text(context.t(widget.task))),
+          body: PageBody(
+            children: [
+              TravelHero(
+                title: context.t(widget.task),
+                subtitle: context.t(
+                  widget.task == 'translate' ? 'translateBody' : 'aiSubtitle',
+                ),
+                icon: featureIcon(widget.task),
+              ),
+              const AiServiceStatus(),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed:
+                    submitting ||
+                        (widget.task == 'vision' &&
+                            ref
+                                    .watch(guideCapabilitiesProvider)
+                                    .asData
+                                    ?.value['vision'] !=
+                                true)
+                    ? null
+                    : () async {
+                        final repo = ref.read(repositoryProvider);
+                        if (widget.task == 'vision' || widget.task == 'voice') {
+                          if (submitting) return;
+                          setState(() => submitting = true);
+                          if (widget.task == 'vision') {
+                            final consent = await showDialog<bool>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: Text(
+                                  context.isKhmer
+                                      ? 'ចែករំលែករូបថតជាមួយ AI?'
+                                      : 'Share a photo with AI?',
+                                ),
+                                content: Text(
+                                  context.isKhmer
+                                      ? 'រូបថតដែលអ្នកជ្រើសរើស និងទិន្នន័យភ្ជាប់របស់វា នឹងផ្ញើទៅម៉ាស៊ីនមេ និង Google Gemini។ ជៀសវាងមុខមនុស្ស ឯកសារឯកជន និងព័ត៌មានរសើប។ លទ្ធផលអាចខុស។'
+                                      : 'Your selected photo, including any embedded metadata, will be uploaded to our backend and Google Gemini. Avoid faces, private documents and sensitive information. Recognition can be wrong.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, false),
+                                    child: Text(context.t('cancel')),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(dialogContext, true),
+                                    child: Text(
+                                      context.isKhmer
+                                          ? 'យល់ព្រម និងជ្រើសរូបថត'
+                                          : 'Agree and choose photo',
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (consent != true || !context.mounted) {
-                        if (mounted) setState(() => submitting = false);
-                        return;
-                      }
-                    }
-                    setState(() => submitting = true);
-                    try {
-                      final media = await uploadMedia(
-                        context,
-                        'guide/media',
-                        audio: widget.task == 'voice',
-                        imagesOnly: widget.task == 'vision',
-                      );
-                      if (media == null || !context.mounted) {
-                        return;
-                      }
-                      final data = await runRequest(
-                        context,
-                        () => repo.guide(widget.task, {
-                          'mediaId': media['mediaId'],
-                          if (widget.task == 'vision')
-                            'shareWithProvider': true,
-                          'language': context.isKhmer ? 'km' : 'en',
-                        }),
-                      );
-                      if (mounted) {
-                        setState(() => result = data);
-                      }
-                    } finally {
-                      if (mounted) setState(() => submitting = false);
-                    }
-                  } else {
-                    final data = await remoteForm(
+                            );
+                            if (consent != true || !context.mounted) {
+                              if (mounted) setState(() => submitting = false);
+                              return;
+                            }
+                          }
+                          setState(() => submitting = true);
+                          try {
+                            final media = await uploadMedia(
+                              context,
+                              'guide/media',
+                              audio: widget.task == 'voice',
+                              imagesOnly: widget.task == 'vision',
+                            );
+                            if (media == null || !context.mounted) {
+                              return;
+                            }
+                            final data = await runRequest(
+                              context,
+                              () => repo.guide(widget.task, {
+                                'mediaId': media['mediaId'],
+                                if (widget.task == 'vision')
+                                  'shareWithProvider': true,
+                                'language': context.isKhmer ? 'km' : 'en',
+                              }),
+                            );
+                            if (mounted) {
+                              setState(() => result = data);
+                            }
+                          } finally {
+                            if (mounted) setState(() => submitting = false);
+                          }
+                        } else {
+                          final data = await remoteForm(
+                            context,
+                            widget.task,
+                            [
+                              InputSpec(
+                                'text',
+                                label: widget.task == 'chat'
+                                    ? 'message'
+                                    : 'translationText',
+                                kind: InputKind.multiline,
+                              ),
+                              if (widget.task != 'chat')
+                                const InputSpec(
+                                  'targetLanguage',
+                                  initial: 'km',
+                                  choices: ['km', 'en'],
+                                ),
+                            ],
+                            submitLabel: 'confirm',
+                            submit: (body, _) async {
+                              if (widget.task == 'chat') {
+                                conversationId ??= string(
+                                  await repo.conversation(),
+                                  'id',
+                                );
+                                return repo.message(
+                                  conversationId!,
+                                  body['text'],
+                                );
+                              }
+                              return repo.guide('translation', body);
+                            },
+                          );
+                          if (mounted && data != null) {
+                            setState(() => result = data);
+                          }
+                        }
+                      },
+                icon: Icon(
+                  widget.task == 'translate'
+                      ? Icons.translate
+                      : widget.task == 'chat'
+                      ? Icons.chat_bubble_outline
+                      : featureIcon(widget.task),
+                ),
+                label: Text(
+                  context.t(
+                    widget.task == 'vision' || widget.task == 'voice'
+                        ? 'chooseFile'
+                        : 'next',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (result != null) ...[
+                CompanionAnswer(data: object(result)),
+                const SizedBox(height: 16),
+                if (widget.task == 'translate')
+                  OutlinedButton(
+                    onPressed: () => remoteForm(
                       context,
-                      widget.task,
+                      'saveTranslation',
                       [
                         InputSpec(
                           'text',
-                          label: widget.task == 'chat'
-                              ? 'message'
-                              : 'translationText',
                           kind: InputKind.multiline,
-                        ),
-                        if (widget.task != 'chat')
-                          const InputSpec(
-                            'targetLanguage',
-                            initial: 'km',
-                            choices: ['km', 'en'],
+                          initial: string(
+                            object(result),
+                            'translatedText',
+                            string(object(result), 'text'),
                           ),
+                        ),
                       ],
-                      submitLabel: 'confirm',
-                      submit: (body, _) async {
-                        if (widget.task == 'chat') {
-                          conversationId ??= string(
-                            await repo.conversation(),
-                            'id',
-                          );
-                          return repo.message(conversationId!, body['text']);
-                        }
-                        return repo.guide('translation', body);
-                      },
-                    );
-                    if (mounted && data != null) {
-                      setState(() => result = data);
-                    }
-                  }
-                },
-          icon: Icon(
-            widget.task == 'translate'
-                ? Icons.translate
-                : widget.task == 'chat'
-                ? Icons.chat_bubble_outline
-                : featureIcon(widget.task),
-          ),
-          label: Text(
-            context.t(
-              widget.task == 'vision' || widget.task == 'voice'
-                  ? 'chooseFile'
-                  : 'next',
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        if (result != null) ...[
-          CompanionAnswer(data: object(result)),
-          const SizedBox(height: 16),
-          if (widget.task == 'translate')
-            OutlinedButton(
-              onPressed: () => remoteForm(
-                context,
-                'saveTranslation',
-                [
-                  InputSpec(
-                    'text',
-                    kind: InputKind.multiline,
-                    initial: string(
-                      object(result),
-                      'translatedText',
-                      string(object(result), 'text'),
+                      submit: (b, _) =>
+                          ref.read(repositoryProvider).savePhrase(b['text']),
+                    ),
+                    child: Text(context.t('saveTranslation')),
+                  ),
+              ],
+              if (widget.task == 'translate')
+                TextButton(
+                  onPressed: () => openScreen(
+                    context,
+                    ConnectedTools(
+                      tool: 'translation',
+                      profile: widget.profile,
                     ),
                   ),
-                ],
-                submit: (b, _) =>
-                    ref.read(repositoryProvider).savePhrase(b['text']),
-              ),
-              child: Text(context.t('saveTranslation')),
-            ),
-        ],
-        if (widget.task == 'translate')
-          TextButton(
-            onPressed: () => openScreen(
-              context,
-              ConnectedTools(tool: 'translation', profile: widget.profile),
-            ),
-            child: Text(context.t('savedPhrases')),
+                  child: Text(context.t('savedPhrases')),
+                ),
+            ],
           ),
-      ],
-    ),
-  );
+        );
 }

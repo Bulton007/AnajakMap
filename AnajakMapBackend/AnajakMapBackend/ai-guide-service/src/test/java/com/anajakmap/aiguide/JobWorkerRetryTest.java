@@ -6,6 +6,14 @@ import org.springframework.http.*;
 import org.springframework.web.server.ResponseStatusException;
 
 class JobWorkerRetryTest {
+  @Test void invalidProviderReplyIsNotRetriedAutomaticallyOrReportedAsUserInput() {
+    var error = new InvalidGuideResponseException();
+    assertEquals(502, error.getStatusCode().value());
+    var plan = JobWorker.failurePlan(error, 1);
+    assertFalse(plan.retry());
+    assertEquals("INVALID_AI_RESPONSE", plan.code());
+    assertEquals(0, plan.delaySeconds());
+  }
   @Test void exhaustedQuotaDoesNotTriggerRapidAutomaticRetries() {
     var error = new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS) {
       @Override public HttpHeaders getHeaders() {

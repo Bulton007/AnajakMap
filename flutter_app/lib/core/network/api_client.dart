@@ -74,6 +74,15 @@ class ApiClient {
             ),
           ) {
     dio.options.baseUrl = baseUrl;
+    final host = Uri.tryParse(baseUrl)?.host.toLowerCase();
+    if (host != null &&
+        (host.endsWith('.ngrok-free.dev') ||
+            host.endsWith('.ngrok-free.app') ||
+            host.endsWith('.ngrok.app') ||
+            host.endsWith('.ngrok.dev'))) {
+      // Free ngrok endpoints show a browser warning unless API clients opt out.
+      dio.options.headers['ngrok-skip-browser-warning'] = '1';
+    }
   }
   final Dio dio;
   final CredentialStore credentials;

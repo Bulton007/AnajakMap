@@ -33,6 +33,29 @@ void main() {
     expect(await offline.load('server|alice', url), image);
     expect(await offline.load('other-server|alice', url), isNull);
   });
+  test('current Wikimedia thumbnail host is downloaded and cached', () async {
+    Uri? requested;
+    final cache = PlacePhotoCache(
+      db,
+      fetch: (uri) async {
+        requested = uri;
+        return image;
+      },
+    );
+    addTearDown(cache.dispose);
+    const thumbnail =
+        'https://thumb.wikimedia.org/wikipedia/commons/thumb/test.png';
+    expect(await cache.load('server|alice', thumbnail), image);
+    expect(requested?.host, 'thumb.wikimedia.org');
+    expect(await db.cached('server|alice', 'photo:$thumbnail'), isNotNull);
+    expect(
+      await cache.load(
+        'server|alice',
+        'https://thumb.wikimedia.org.evil.test/x.png',
+      ),
+      isNull,
+    );
+  });
   test(
     'unsafe hosts, oversized and corrupt images are not persisted',
     () async {

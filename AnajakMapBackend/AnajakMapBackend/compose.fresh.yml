@@ -1,0 +1,29 @@
+# Version 12 test server. Always use with -p anajakmap-v12 and include this last.
+# !override requires Docker Compose 2.24.4 or newer. No old project ports merge in.
+name: anajakmap-v12
+services:
+  minio:
+    image: anajakmap-v12/minio:local-2025-04-22
+  object-init:
+    image: anajakmap-v12/mc:local-2025-04-16
+  identity-service:
+    image: anajakmap-v12/identity-service:latest
+  trip-service:
+    image: anajakmap-v12/trip-service:latest
+  ai-guide-service:
+    image: anajakmap-v12/ai-guide-service:latest
+  discovery-service:
+    image: anajakmap-v12/discovery-service:latest
+  expense-service:
+    image: anajakmap-v12/expense-service:latest
+  reservation-service:
+    image: anajakmap-v12/reservation-service:latest
+  journal-service:
+    image: anajakmap-v12/journal-service:latest
+  notification-service:
+    image: anajakmap-v12/notification-service:latest
+  gateway-service:
+    image: anajakmap-v12/gateway-service:latest
+    ports: !override ["127.0.0.1:18080:8089"]
+  nginx:
+    ports: !override ["127.0.0.1:18090:8080"]

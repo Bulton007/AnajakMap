@@ -20,6 +20,7 @@ public class DiscoveryApi {
   private final RateLimit limit;
   private final PhotonPlaces photon;
   private final PlacePhotos photos;
+  private final TravelPlaces travelPlaces;
   private final OsrmRoutes routes;
   private final DestinationWeather weather;
 
@@ -29,7 +30,8 @@ public class DiscoveryApi {
       @Value("${anajak.provider-key}") String k,
       StringRedisTemplate r,
       Changes c,
-      RateLimit l, PhotonPlaces photon, PlacePhotos photos, OsrmRoutes routes, DestinationWeather weather) {
+      RateLimit l, PhotonPlaces photon, PlacePhotos photos, OsrmRoutes routes, DestinationWeather weather, TravelPlaces travelPlaces) {
+    this.travelPlaces = travelPlaces;
     this.weather = weather;
     this.routes = routes;
     this.photon = photon;
@@ -51,7 +53,7 @@ public class DiscoveryApi {
       @RequestParam(defaultValue="0") int page) {
     if(query.isBlank()||query.length()>200||page<0)throw new IllegalArgumentException();
     limit.check("photos:"+jwt.getSubject(),20,60);
-    return photon.enabled()?photos.photos(photon.search(query,page,20)):Map.of();
+    return photon.enabled()?photos.photos(travelPlaces.search(query,page,20)):Map.of();
   }
 
   @GetMapping("/places")
@@ -63,7 +65,7 @@ public class DiscoveryApi {
     if (query.isBlank() || query.length() > 200 || page < 0 || size < 1 || size > 100)
       throw new IllegalArgumentException();
     limit.check("discovery:" + jwt.getSubject(), 60, 60);
-    if (photon.enabled()) return photon.search(query, page, size);
+    if (photon.enabled()) return travelPlaces.search(query, page, size);
     if (dev)
       return page > 0 ? List.of() : List.of(
           place("Royal Palace", 11.5638, 104.9315),

@@ -7,7 +7,11 @@ RUN git clone --depth 1 --branch ${RELEASE} https://github.com/minio/${COMPONENT
 WORKDIR /src
 RUN CGO_ENABLED=0 go build -trimpath -o /out/tool .
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && mkdir /data && chown 1001:1001 /data
+# The official Go builder already includes the trust bundle used for its HTTPS
+# source fetches. Copy it instead of adding an independent apt mirror download
+# to every first-time MinIO/mc build.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN test -s /etc/ssl/certs/ca-certificates.crt && mkdir /data && chown 1001:1001 /data
 ARG COMPONENT=minio
 COPY --from=build /out/tool /usr/local/bin/tool
 RUN ln -s /usr/local/bin/tool /usr/local/bin/${COMPONENT}

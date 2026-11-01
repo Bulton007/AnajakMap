@@ -26,12 +26,12 @@ class Creature {
 }
 
 const creatures = [
-  Creature('mossling', 'Mossling', Biome.temple, Grade.common, 1, 150),
-  Creature('amberhorn', 'Amberhorn', Biome.temple, Grade.rare, 3, 38),
-  Creature('moonwarden', 'Moonwarden', Biome.temple, Grade.epic, 5, 265),
-  Creature('bubblefin', 'Bubblefin', Biome.beach, Grade.common, 1, 185),
-  Creature('coralclaw', 'Coralclaw', Biome.beach, Grade.rare, 3, 350),
-  Creature('tidewing', 'Tidewing', Biome.beach, Grade.epic, 5, 215),
+  Creature('mossling', 'Lotus Naga', Biome.temple, Grade.common, 1, 150),
+  Creature('amberhorn', 'Dawn Singha', Biome.temple, Grade.rare, 3, 38),
+  Creature('moonwarden', 'Moon Krut', Biome.temple, Grade.epic, 5, 265),
+  Creature('bubblefin', 'River Makara', Biome.beach, Grade.common, 1, 185),
+  Creature('coralclaw', 'Coral Terrapin', Biome.beach, Grade.rare, 3, 350),
+  Creature('tidewing', 'Cloud Vanara', Biome.beach, Grade.epic, 5, 215),
 ];
 
 /// Practice progress is device-local and never represents an account balance.

@@ -31,20 +31,26 @@ public class PlacePhotos {
     var f=new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build());
     f.setReadTimeout(Duration.ofSeconds(8));
     return RestClient.builder().baseUrl(url).requestFactory(f)
-        .defaultHeader("User-Agent","AnajakTravel/1.0 (place photos; contact forusea168@gmail.com)").build();
+        .defaultHeader("User-Agent","AnajakTravel/1.0 (https://github.com/Bulton007/AnajakMap)").build();
   }
   public Map<String,Object> photos(List<Map<String,Object>> places) {
     if(places.isEmpty())return Map.of();
-    String key="place-photos:v4:"+Changes.hash(places.toString());
+    String key="place-photos:v5:"+Changes.hash(places.toString());
     try {
       String cached=redis.opsForValue().get(key);
       if(cached!=null)return mapper.readValue(cached,Map.class);
       if(!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent("place-photos:request","1",Duration.ofSeconds(3))))
         return Map.of();
       var files=new LinkedHashMap<String,String>();
+      // Geosearch pages already provide the file for that exact title and coordinate.
+      for(var place:places)if(place.get("wikipediaImage") instanceof String image
+          &&place.get("id").toString().startsWith("wikipedia:en:")&&!image.contains("|"))
+        files.put(place.get("id").toString(),"File:"+image);
       for(var entry:List.of(Map.entry(en,false),Map.entry(km,true))) {
-        var selected=places.stream().filter(p->hasKhmer(p.get("name").toString())==entry.getValue()).toList();
+        var selected=places.stream().filter(p->!files.containsKey(p.get("id").toString()))
+            .filter(p->hasKhmer(p.get("name").toString())==entry.getValue()).toList();
         if(selected.isEmpty())continue;
+        try {
         var variants=new LinkedHashSet<String>();
         for(var p:selected) {
           String name=p.get("name").toString().replace("|"," ");variants.add(name);
@@ -56,11 +62,15 @@ public class PlacePhotos {
             .queryParam("action","query").queryParam("format","json").queryParam("formatversion",2)
             .queryParam("prop","pageimages|coordinates").queryParam("piprop","name")
             .queryParam("pilicense","free").queryParam("pilimit",40).queryParam("colimit","max")
-            .queryParam("titles",titles).build()).retrieve().body(JsonNode.class);
+            .queryParam("redirects",1).queryParam("titles",titles).build()).retrieve().body(JsonNode.class);
         if(response==null||response.has("error"))throw new IllegalStateException();
         for(var page:response.path("query").path("pages"))for(var place:selected)
-          if(matches(place,page)&&!page.path("pageimage").asText().isBlank())
+          if(matches(place,page,response)&&!page.path("pageimage").asText().isBlank())
             files.put(place.get("id").toString(),"File:"+page.path("pageimage").asText());
+        } catch(Exception lookupFailure) {
+          // A missing article batch must not discard already verified geosearch files.
+          org.slf4j.LoggerFactory.getLogger(PlacePhotos.class).warn("place_photo_article_lookup_unavailable type={}",lookupFailure.getClass().getSimpleName());
+        }
       }
       var result=new LinkedHashMap<String,Object>();
       if(!files.isEmpty()) {
@@ -76,7 +86,7 @@ public class PlacePhotos {
         }
       }
       org.slf4j.LoggerFactory.getLogger(PlacePhotos.class).info("place_photos_matched files={} licensed={}",files.size(),result.size());
-      redis.opsForValue().set(key,mapper.writeValueAsString(result),Duration.ofHours(24));
+      redis.opsForValue().set(key,mapper.writeValueAsString(result),result.isEmpty()?Duration.ofMinutes(5):Duration.ofHours(24));
       return result;
     } catch(Exception e) {
       // Search results remain usable when optional photo services are unavailable.
@@ -88,7 +98,24 @@ public class PlacePhotos {
   static boolean hasKhmer(String value){return value.codePoints().anyMatch(c->c>=0x1780&&c<=0x17ff);}
   static String normal(String value){return value.replace('_',' ').strip().toLowerCase(Locale.ROOT);}
   static String articleName(String value) { return normal(value).replaceFirst("\\s+temple$",""); }
+  static boolean matches(Map<String,Object> place,JsonNode article,JsonNode response) {
+    if(matches(place,article))return true;
+    // Accept aliases only when Wikipedia itself resolves them to this exact article.
+    var aliases=new LinkedHashSet<String>();aliases.add(article.path("title").asText());
+    for(int step=0;step<5;step++)for(var redirect:response.path("query").path("redirects"))
+      if(aliases.contains(redirect.path("to").asText()))aliases.add(redirect.path("from").asText());
+    for(var alias:aliases) {
+      var named=article.deepCopy();
+      if(named instanceof com.fasterxml.jackson.databind.node.ObjectNode object) {
+        object.put("title",alias);
+        if(matches(place,named))return true;
+      }
+    }
+    return false;
+  }
   static boolean matches(Map<String,Object> p,JsonNode article) {
+    if(List.of("station","motorway","landfill","industrial","military","residential","commercial","locality")
+        .contains(p.getOrDefault("category","")))return false;
     if(!articleName(p.get("name").toString()).equals(articleName(article.path("title").asText())))return false;
     var c=article.path("coordinates").path(0);
     if(!c.path("lat").isNumber()||!c.path("lon").isNumber())return false;

@@ -20,6 +20,13 @@ abstract final class Tokens {
   static const motion = Duration(milliseconds: 220);
   static const mapDestination = Color(0xFFB3261E);
   static const mapRoute = Color(0xFF246BCE);
+  // Keep Khmer as the body font while allowing the operating system to draw
+  // complete color emoji sequences in user-entered and AI-generated text.
+  static const emojiFallback = [
+    'Noto Color Emoji',
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+  ];
 
   static ({Color background, Color foreground}) accent(
     BuildContext context,
@@ -82,6 +89,7 @@ abstract final class Tokens {
       useMaterial3: true,
       colorScheme: scheme,
       fontFamily: 'NotoSansKhmer',
+      fontFamilyFallback: emojiFallback,
       brightness: brightness,
     );
     return base.copyWith(
@@ -176,6 +184,7 @@ abstract final class Tokens {
         labelTextStyle: WidgetStatePropertyAll(
           TextStyle(
             fontFamily: 'NotoSansKhmer',
+            fontFamilyFallback: emojiFallback,
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: scheme.onSurface,

@@ -79,13 +79,22 @@ class _PlacePhotoState extends State<PlacePhoto> {
     }
     final image =
         widget.imageProvider ??
-        ResizeImage(NetworkImage(uri.toString()), width: 1200);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+        ResizeImage(
+          NetworkImage(
+            uri.toString(),
+            headers: const {
+              'User-Agent':
+                  'AnajakMap/1.0 (https://github.com/Bulton007/AnajakMap)',
+            },
+          ),
+          width: 1200,
+        );
+    return Stack(
       children: [
         Image(
           key: ValueKey('${uri.toString()}:$revision'),
           image: image,
+          width: double.infinity,
           height: 170,
           fit: BoxFit.cover,
           semanticLabel: name,
@@ -101,65 +110,63 @@ class _PlacePhotoState extends State<PlacePhoto> {
             },
           ),
         ),
-        TextButton.icon(
-          style: TextButton.styleFrom(
-            minimumSize: const Size(48, 48),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          ),
-          icon: const Icon(Icons.photo_camera_outlined, size: 16),
-          label: Text(
-            [data['artist'], data['license']]
-                    .whereType<String>()
-                    .where((v) => v.isNotEmpty)
-                    .join(' · ')
-                    .isEmpty
-                ? (Localizations.localeOf(context).languageCode == 'km'
+        PositionedDirectional(
+          end: 8,
+          bottom: 8,
+          child: IconButton.filledTonal(
+            tooltip: Localizations.localeOf(context).languageCode == 'km'
+                ? 'ប្រភពរូបថត៖ $name'
+                : 'Photo credit: $name',
+            style: IconButton.styleFrom(
+              minimumSize: const Size(48, 48),
+              fixedSize: const Size(48, 48),
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surface.withValues(alpha: .94),
+              foregroundColor: Theme.of(context).colorScheme.onSurface,
+            ),
+            icon: const Icon(Icons.info_outline_rounded, size: 20),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (c) => AlertDialog(
+                title: Text(
+                  Localizations.localeOf(c).languageCode == 'km'
                       ? 'ប្រភពរូបថត'
-                      : 'Photo credit')
-                : [
-                    data['artist'],
-                    data['license'],
-                  ].whereType<String>().where((v) => v.isNotEmpty).join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (c) => AlertDialog(
-              title: Text(
-                Localizations.localeOf(c).languageCode == 'km'
-                    ? 'ប្រភពរូបថត'
-                    : 'Photo credit',
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${data['artist']}\n${data['license']}\n${data['credit'] ?? ''}',
-                    ),
-                    TextButton(
-                      onPressed: () => _open(c, data['sourceUrl']),
-                      child: const Text('Wikimedia Commons'),
-                    ),
-                    TextButton(
-                      onPressed: () => _open(c, data['licenseUrl']),
-                      child: Text(
-                        Localizations.localeOf(c).languageCode == 'km'
-                            ? 'អាជ្ញាបណ្ណ'
-                            : 'License',
+                      : 'Photo credit',
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        [data['artist'], data['license'], data['credit']]
+                            .whereType<String>()
+                            .where((value) => value.trim().isNotEmpty)
+                            .join('\n'),
                       ),
-                    ),
-                  ],
+                      TextButton(
+                        onPressed: () => _open(c, data['sourceUrl']),
+                        child: const Text('Wikimedia Commons'),
+                      ),
+                      TextButton(
+                        onPressed: () => _open(c, data['licenseUrl']),
+                        child: Text(
+                          Localizations.localeOf(c).languageCode == 'km'
+                              ? 'អាជ្ញាបណ្ណ'
+                              : 'License',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(c),
+                    child: Text(MaterialLocalizations.of(c).closeButtonLabel),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(c),
-                  child: Text(MaterialLocalizations.of(c).closeButtonLabel),
-                ),
-              ],
             ),
           ),
         ),
@@ -169,7 +176,7 @@ class _PlacePhotoState extends State<PlacePhoto> {
 
   static Future<void> _open(BuildContext context, Object? value) async {
     final uri = Uri.tryParse('$value');
-    if (uri == null || uri.scheme != 'https') return;
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return;
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(

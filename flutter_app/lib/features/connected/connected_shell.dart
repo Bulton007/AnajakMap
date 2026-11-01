@@ -51,7 +51,7 @@ class _ConnectedShellState extends ConsumerState<ConnectedShell> {
       title: Text(context.t('appName')),
       actions: [
         IconButton(
-          tooltip: 'OpenStreetMap',
+          tooltip: context.isKhmer ? 'ផែនទី' : 'Map',
           onPressed: () => context.push('/map'),
           icon: const Icon(Icons.map_outlined),
         ),

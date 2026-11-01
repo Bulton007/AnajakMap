@@ -202,13 +202,27 @@ try {
             "$backendRelative/discovery-service/src/test/java/com/anajakmap/discovery/FixtureTest.java",
             "$backendRelative/scripts/update-fixture.ps1",
             "$backendRelative/compose.local.yml",
+            "$backendRelative/compose.laptop.yml",
+            "$backendRelative/.env.example",
+            "$backendRelative/trip-service/src/main/resources/db/migration/V4__unicode_trip_text.sql",
             "$backendRelative/deploy/laptop/README.md",
-            'Update App Backend.cmd', 'APP_UPDATE_SETUP.md', 'APP_AUDIT.md', 'backend-update-files.txt'
+            'Update App Backend.cmd', 'Update AI.cmd', 'APP_UPDATE_SETUP.md', 'APP_AUDIT.md',
+            'ROUTING_SETUP.md', 'DEVICE_TEST_REPORT.md', 'backend-update-files.txt',
+            'HOME_SERVER_URL_SETUP.md', 'Configure Ngrok.cmd', 'Start Public Backend.cmd',
+            'Recover Backend Config.cmd', 'RECOVER_BACKEND_CONFIG.md', 'Check AI.cmd', 'AI_DIAGNOSTICS.md', 'AI_SETUP_REPAIR.md'
         )
         foreach ($entry in $entries) { Write-FixtureFile (Join-Path $source $entry) 'reviewed source fixture' }
         Set-FixtureManifest $source $entries
         $result = Install-BackendUpdateSources -SourceRoot $source -TargetRoot $target -CheckOnly
         Assert-Equal $entries.Count $result.FileCount 'A reviewed file type was rejected.'
+    }
+    Invoke-InstallerTest 'The complete current source manifest validates without changing a hosting fixture' {
+        $target = New-Fixture 'complete-manifest-target' -Initialized
+        $before = Get-FixtureSnapshot $target
+        $entries = @([IO.File]::ReadAllLines((Join-Path $workspace 'backend-update-files.txt')) | Where-Object { $_.Trim() })
+        $result = Install-BackendUpdateSources -SourceRoot $workspace -TargetRoot $target -CheckOnly
+        Assert-Equal $entries.Count $result.FileCount 'Current package manifest was not fully validated.'
+        Assert-Equal $before (Get-FixtureSnapshot $target) 'Current package validation changed the hosting fixture.'
     }
     Invoke-InstallerTest 'Prevalidate every source before any backup or copy' {
         $source = New-Patch 'missing-file-source'
@@ -224,8 +238,12 @@ try {
     Invoke-InstallerTest 'Reject backslash paths in a manifest' { Test-RejectedManifest 'backslash' @('APP_AUDIT.md', 'AnajakMapBackend\AnajakMapBackend\scripts\update-fixture.ps1') }
     Invoke-InstallerTest 'Reject rooted paths in a manifest' { Test-RejectedManifest 'rooted' @('APP_AUDIT.md', (Join-Path $script:suiteRoot 'absolute.txt')) }
     Invoke-InstallerTest 'Reject .env in a manifest' { Test-RejectedManifest 'env' @('APP_AUDIT.md', "$backendRelative/.env") }
+    Invoke-InstallerTest 'Reject private env variants despite allowing .env.example' { Test-RejectedManifest 'env-local' @('APP_AUDIT.md', "$backendRelative/.env.local") }
+    Invoke-InstallerTest 'Reject unreviewed Compose overrides' { Test-RejectedManifest 'compose-override' @('APP_AUDIT.md', "$backendRelative/compose.override.yml") }
     Invoke-InstallerTest 'Reject signing keys in a manifest' { Test-RejectedManifest 'signing-key' @('APP_AUDIT.md', 'flutter_app/android/key.properties') }
     Invoke-InstallerTest 'Reject unreviewed configuration in a manifest' { Test-RejectedManifest 'private-json' @('APP_AUDIT.md', 'flutter_app/config/production.local.json') }
+    Invoke-InstallerTest 'Reject arbitrary root command launchers' { Test-RejectedManifest 'unreviewed-launcher' @('APP_AUDIT.md', 'Run Arbitrary Command.cmd') }
+    Invoke-InstallerTest 'Reject unreviewed database migrations' { Test-RejectedManifest 'unreviewed-migration' @('APP_AUDIT.md', "$backendRelative/trip-service/src/main/resources/db/migration/V99__unreviewed.sql") }
     Invoke-InstallerTest 'Reject duplicate manifest entries' { Test-RejectedManifest 'duplicate' @('APP_AUDIT.md', 'APP_AUDIT.md') }
     Invoke-InstallerTest 'Reject whitespace around manifest paths' { Test-RejectedManifest 'whitespace' @('APP_AUDIT.md', ' APP_AUDIT.md') }
     Invoke-InstallerTest 'Reject empty manifest' { Test-RejectedManifest 'empty' @() }

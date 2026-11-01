@@ -77,20 +77,26 @@ try {
     }
     & docker @compose config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Compose configuration is invalid. No running service was replaced.' }
-    $services = @('ai-guide-service', 'discovery-service', 'expense-service')
+    $services = @('trip-service', 'ai-guide-service', 'discovery-service', 'expense-service')
     if (!$SkipBuild) {
         $source = (Get-Location).Path
         & docker run --rm --mount "type=bind,source=$source,target=/workspace" `
             --mount type=volume,source=anajak-maven-cache,target=/root/.m2 -w /workspace `
-            maven:3.9.11-eclipse-temurin-21 mvn -B -ntp -pl ai-guide-service,discovery-service,expense-service -am package -DskipTests
+            maven:3.9.11-eclipse-temurin-21 mvn -B -ntp -pl trip-service,ai-guide-service,discovery-service,expense-service -am package -DskipTests
         if ($LASTEXITCODE -ne 0) { throw 'Package build failed. Existing running services were not replaced.' }
         & docker @compose build @services
         if ($LASTEXITCODE -ne 0) { throw 'Image build failed. Existing running services were not replaced.' }
     } else { Write-Host 'Using existing service images (-SkipBuild). No Maven/image build will run.' }
+    # Runtime containers intentionally use restricted *_APP users with Flyway
+    # disabled. Run the reviewed additive migration separately as schema owner,
+    # using the same established migration path as start-local.ps1.
+    $migrationCompose = @('compose', '-f', 'compose.yml', '-f', 'compose.media-source.yml', '-f', 'compose.local.yml')
+    & docker @migrationCompose run --rm --no-deps -e MIGRATE_ONLY=true trip-service
+    if ($LASTEXITCODE -ne 0) { throw 'Trip schema migration failed. Existing service containers were not replaced; retain the original .env and inspect the migration failure locally.' }
     & docker @compose up -d --no-build @services
     if ($LASTEXITCODE -ne 0) { throw 'Service restart failed. Check Docker logs locally.' }
     . (Join-Path $PSScriptRoot 'backend-readiness.ps1')
-    $ports = @{'ai-guide-service'=8083; 'discovery-service'=8084; 'expense-service'=8085}
+    $ports = @{'trip-service'=8082; 'ai-guide-service'=8083; 'discovery-service'=8084; 'expense-service'=8085}
     foreach ($service in $services) {
         $id = & docker @compose ps -q $service
         if ($LASTEXITCODE -ne 0) { throw "Could not find $service after starting it." }

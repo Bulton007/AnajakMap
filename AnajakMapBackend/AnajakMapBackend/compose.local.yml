@@ -17,12 +17,16 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
       GEMINI_VISION_ENABLED: ${GEMINI_VISION_ENABLED:-false}
+      GEMINI_VOICE_ENABLED: ${GEMINI_VOICE_ENABLED:-false}
     build:
       dockerfile: Dockerfile.local
   discovery-service:
     dns: ["${EXTERNAL_DNS:-1.1.1.1}"]
     environment:
       OSRM_URL: ${OSRM_URL:-}
+      # Public OSRM demo is restricted to non-commercial dev/test, <=1 request/s.
+      # Production requires a self-hosted/licensed OSRM_URL; never uses this fallback.
+      OSRM_DEMO_ENABLED: ${OSRM_DEMO_ENABLED:-true}
       WEATHER_PROVIDER: ${WEATHER_PROVIDER:-open-meteo}
       RPG_SIMULATION_ENABLED: "true"
       RPG_ENCOUNTER_TTL_SECONDS: ${RPG_ENCOUNTER_TTL_SECONDS:-900}

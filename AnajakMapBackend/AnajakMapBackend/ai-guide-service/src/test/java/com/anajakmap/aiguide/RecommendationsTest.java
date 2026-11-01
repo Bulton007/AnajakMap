@@ -22,7 +22,7 @@ class RecommendationsTest {
   final RecommendationsApi api=new RecommendationsApi(builder.build(),provider,mock(RateLimit.class),redis);
   final Jwt user=Jwt.withTokenValue("test").header("alg","none").claim("sub","account").build();
   void places() {
-    server.expect(requestTo("http://discovery/api/v1/discovery/places?query=temple%20Siem%20Reap&size=20"))
+    server.expect(requestTo("http://discovery/api/v1/discovery/places?query=Siem%20Reap&size=20"))
       .andExpect(header("Authorization","Bearer local-token"))
       .andRespond(withSuccess("{\"data\":[{\"id\":\"osm:N:123\",\"name\":\"Cafe\",\"category\":\"cafe\"},{\"id\":\"osm:W:456\",\"name\":\"Temple\",\"category\":\"place_of_worship\"}]}",MediaType.APPLICATION_JSON));
   }
@@ -56,6 +56,25 @@ class RecommendationsTest {
     assertThrows(IllegalArgumentException.class,()->api.recommend(user,"Bearer local-token",new RecommendationsApi.Request("Siem Reap",List.of("fake"),"balanced","en",false)));
     assertTrue(RecommendationsApi.references(Map.of("id","osm:N:https://evil.test")).isEmpty());
     assertTrue(RecommendationsApi.references(Map.of("id","fixture")).isEmpty());
+    assertTrue(RecommendationsApi.references(Map.of("id","wikipedia:en:https://evil.test")).isEmpty());
+    assertTrue(RecommendationsApi.references(Map.of("id","wikipedia:en:123&redirect=https://evil.test")).isEmpty());
+    assertTrue(RecommendationsApi.references(Map.of("id","wikipedia:en:-1")).isEmpty());
+  }
+  @Test void cityCultureSightsRetainTheirVerifiedWikipediaReference() {
+    server.expect(requestTo("http://discovery/api/v1/discovery/places?query=Phnom%20Penh&size=20"))
+        .andRespond(withSuccess("{\"data\":[{\"id\":\"wikipedia:en:1001\",\"name\":\"Royal Palace\",\"latitude\":11.5638,\"longitude\":104.9315,\"category\":\"attraction\",\"source\":\"Wikipedia · geolocated travel sight\"},{\"id\":\"osm:N:123\",\"name\":\"Phnom Penh\",\"category\":\"city\"}]}",MediaType.APPLICATION_JSON));
+    Map result=(Map)api.recommend(user,"Bearer local-token",new RecommendationsApi.Request("Phnom Penh",List.of("culture"),"balanced","en",false));
+    Map first=(Map)((List)result.get("items")).getFirst();
+    assertEquals("Royal Palace",first.get("name"));
+    assertEquals("culture",first.get("matchedInterest"));
+    assertEquals(List.of(Map.of("title","Wikipedia","url","https://en.wikipedia.org/?curid=1001","supports","name_location")),first.get("references"));
+    verifyNoInteractions(provider);server.verify();
+  }
+  @Test void foodQueriesRetainSpecificSearchTerms() {
+    server.expect(requestTo("http://discovery/api/v1/discovery/places?query=restaurant%20Kampot&size=20"))
+        .andRespond(withSuccess("{\"data\":[]}",MediaType.APPLICATION_JSON));
+    Map result=(Map)api.recommend(user,"Bearer local-token",new RecommendationsApi.Request("Kampot",List.of("food"),"balanced","en",false));
+    assertEquals("restaurant Kampot",result.get("query"));server.verify();
   }
   @Test void quotaCooldownNeverCallsModelAgain() {
     places();when(redis.getExpire("recommendations:ai:cooldown")).thenReturn(5000L);

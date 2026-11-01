@@ -76,6 +76,11 @@ class AdventureState {
       !needsRefresh &&
       !expired &&
       !(retryAt?.isAfter(DateTime.now()) ?? false);
+  DateTime? get nextEncounter =>
+      DateTime.tryParse(string(snapshot?.profile ?? {}, 'nextEncounter'));
+  bool get encounterCoolingDown =>
+      nextEncounter?.isAfter(DateTime.now()) ?? false;
+  bool get canStart => canAct && !active && !encounterCoolingDown;
 }
 
 class _Pending {
@@ -96,8 +101,25 @@ class AdventureController extends Notifier<AdventureState> {
   String get realm => scope.$2;
   _Pending? _pending;
   Timer? _expiry;
+  Timer? _cooldown;
   void _watchExpiry() {
     _expiry?.cancel();
+    _cooldown?.cancel();
+    if (state.encounterCoolingDown) {
+      _cooldown = Timer(
+        state.nextEncounter!.difference(DateTime.now()) +
+            const Duration(milliseconds: 20),
+        () {
+          if (ref.mounted) {
+            state = _state(
+              busy: state.busy,
+              failure: state.failure,
+              needsRefresh: state.needsRefresh,
+            );
+          }
+        },
+      );
+    }
     if (!state.active) return;
     final end = DateTime.tryParse(
       state.session?['expiresAt']?.toString() ?? '',
@@ -117,7 +139,10 @@ class AdventureController extends Notifier<AdventureState> {
   AdventureRepository get repo => ref.read(adventureRepositoryProvider);
   @override
   AdventureState build() {
-    ref.onDispose(() => _expiry?.cancel());
+    ref.onDispose(() {
+      _expiry?.cancel();
+      _cooldown?.cancel();
+    });
     scheduleMicrotask(load);
     return const AdventureState(busy: true);
   }
@@ -127,11 +152,12 @@ class AdventureController extends Notifier<AdventureState> {
     ApiFailure? failure,
     bool needsRefresh = false,
     DateTime? retryAt,
+    Json? capabilities,
   }) => AdventureState(
     busy: busy,
     snapshot: state.snapshot,
     world: state.world,
-    capabilities: state.capabilities,
+    capabilities: capabilities ?? state.capabilities,
     session: state.session,
     failure: failure,
     pending: _pending != null,
@@ -144,6 +170,10 @@ class AdventureController extends Notifier<AdventureState> {
     state = _state(busy: true);
     try {
       final caps = await repo.capabilities();
+      if (!ref.mounted) return;
+      // Retain available modes even when a realm's world/profile is unavailable.
+      // A failed field request must not hide an otherwise playable practice mode.
+      state = _state(busy: true, capabilities: caps);
       final world = await repo.world(realm);
       final snapshot = await repo.profile(realm);
       if (ref.mounted) {
@@ -172,7 +202,7 @@ class AdventureController extends Notifier<AdventureState> {
     bool safe, {
     bool boss = false,
   }) async {
-    if (!state.canAct || state.active || !safe) return;
+    if (!state.canStart || !safe) return;
     state = _state(busy: true);
     try {
       final location = realm == 'field'
@@ -206,6 +236,19 @@ class AdventureController extends Notifier<AdventureState> {
     if (!state.canAct) return;
     _pending = _Pending('$realm/quests/$id/claim', {});
     await _send();
+  }
+
+  void dismissCompletedEncounter() {
+    if (state.active || state.busy || state.pending) return;
+    state = AdventureState(
+      snapshot: state.snapshot,
+      world: state.world,
+      capabilities: state.capabilities,
+      failure: state.failure,
+      needsRefresh: state.needsRefresh,
+      retryAt: state.retryAt,
+    );
+    _watchExpiry();
   }
 
   Future<void> manage(String operation, Json body) async {

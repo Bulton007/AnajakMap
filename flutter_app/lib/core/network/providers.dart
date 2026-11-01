@@ -15,13 +15,14 @@ final apiProvider = Provider((ref) {
 final repositoryProvider = Provider(
   (ref) => TravelRepository(ref.watch(apiProvider)),
 );
-final guideCapabilitiesProvider = FutureProvider.autoDispose<Json>((ref) async {
-  try {
+final guideCapabilitiesProvider = FutureProvider.autoDispose<Json>(
+  retry: (count, error) => null,
+  (ref) async {
+    // A failed status request is not evidence that a feature is unconfigured.
+    // Preserve the error so the UI can offer a connection retry.
     return object(await ref.watch(repositoryProvider).guideCapabilities());
-  } catch (_) {
-    return {'vision': false, 'voice': false};
-  }
-});
+  },
+);
 final databaseProvider = Provider((ref) {
   final db = TravelDatabase();
   ref.onDispose(() => db.close());
