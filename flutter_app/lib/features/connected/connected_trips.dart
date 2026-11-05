@@ -2,6 +2,8 @@ import '../../shared/formatting/travel_dates.dart';
 import 'package:go_router/go_router.dart';
 import '../../shared/components/visual.dart';
 import 'package:flutter/material.dart';
+import 'trip_chat.dart';
+import 'trip_invitations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/localization/strings.dart';
 import '../../core/network/api_client.dart';
@@ -236,14 +238,17 @@ class _ConnectedTripsState extends ConsumerState<ConnectedTrips> {
         TextButton(onPressed: load, child: Text(context.t('loadMore'))),
       const SizedBox(height: 16),
       OutlinedButton(
-        onPressed: () => remoteForm(
+        onPressed: () => openScreen(
           context,
-          'acceptInvitation',
-          [const InputSpec('tripId')],
-          submit: (body, _) =>
-              ref.read(repositoryProvider).acceptInvite(body['tripId']),
-        ).then((_) => load(reset: true)),
-        child: Text(context.t('acceptInvitation')),
+          TripInvitations(
+            onAccepted: () {
+              if (mounted) load(reset: true);
+            },
+          ),
+        ),
+        child: Text(
+          context.isKhmer ? 'ការអញ្ជើញចូលរួមដំណើរ' : 'Trip invitations',
+        ),
       ),
       const SizedBox(height: 12),
       OutlinedButton(
@@ -263,6 +268,22 @@ class ConnectedTripDetail extends ConsumerWidget {
   });
   final String tripId;
   final Json profile;
+
+  Future<Object?> scheduleReminder(
+    BuildContext context,
+    WidgetRef ref,
+    String title, [
+    String dueAt = '',
+  ]) => remoteForm(
+    context,
+    'addReminder',
+    [
+      InputSpec('title', initial: title),
+      InputSpec('dueAt', kind: InputKind.instant, initial: dueAt),
+    ],
+    submit: (body, _) =>
+        ref.read(repositoryProvider).reminder(body['title'], body['dueAt']),
+  );
   @override
   Widget build(BuildContext context, WidgetRef ref) => Scaffold(
     appBar: AppBar(title: Text(context.t('itinerary'))),
@@ -289,6 +310,19 @@ class ConnectedTripDetail extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                ActionChip(
+                  avatar: const Icon(Icons.forum_outlined, size: 20),
+                  label: Text(context.isKhmer ? 'ជជែកក្នុងដំណើរ' : 'Trip chat'),
+                  onPressed: () => openScreen(
+                    context,
+                    TripChat(tripId: trip.id, accountId: string(profile, 'id')),
+                  ),
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.notifications_outlined, size: 20),
+                  label: Text(context.t('addReminder')),
+                  onPressed: () => scheduleReminder(context, ref, trip.title),
+                ),
                 for (final tool in [
                   'expenses',
                   'reservations',
@@ -337,15 +371,29 @@ class ConnectedTripDetail extends ConsumerWidget {
                 activity: activities[i],
                 zone: trip.timezone,
                 order: i,
-                action: IconButton(
-                  tooltip: context.t('confirm'),
-                  icon: const Icon(Icons.thumb_up_outlined),
-                  onPressed: () => runRequest(
-                    context,
-                    () => ref
-                        .read(repositoryProvider)
-                        .vote(trip.id, activities[i].id, 1),
-                  ),
+                action: Wrap(
+                  children: [
+                    IconButton(
+                      tooltip: context.t('addReminder'),
+                      icon: const Icon(Icons.notifications_outlined),
+                      onPressed: () => scheduleReminder(
+                        context,
+                        ref,
+                        activities[i].title,
+                        activities[i].startsAt,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: context.t('confirm'),
+                      icon: const Icon(Icons.thumb_up_outlined),
+                      onPressed: () => runRequest(
+                        context,
+                        () => ref
+                            .read(repositoryProvider)
+                            .vote(trip.id, activities[i].id, 1),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             const SizedBox(height: 20),

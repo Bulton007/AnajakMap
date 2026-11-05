@@ -3,12 +3,16 @@ import 'package:dio/dio.dart';
 import '../../shared/models/server_models.dart';
 import 'api_client.dart';
 import '../../shared/models/map_route.dart';
+import '../notifications/device_notifications.dart';
 
 /// Matches the Spring controllers. JSON is retained for provider-defined metadata;
 /// trip/activity/job boundaries are typed and Oracle projection casing is normalized.
 class TravelRepository {
-  TravelRepository(this.client);
+  TravelRepository(this.client, {this.deviceNotifications});
   final ApiClient client;
+  final DeviceNotifications? deviceNotifications;
+  String get _notificationScope =>
+      '${client.dio.options.baseUrl}|${string(client.cachedProfile ?? {}, 'id')}';
   Future<Json> auth(String operation, Json input) async {
     final data = object(
       await client.request('POST', 'auth/$operation', body: input, auth: false),
@@ -322,6 +326,63 @@ class TravelRepository {
       );
   Future<Uint8List> media(String path) async =>
       (await client.request('GET', path, binary: true)) as Uint8List;
+  Future<List<Json>> pendingInvitations() async =>
+      objects(await client.request('GET', 'trips/invitations'));
+  Future<Json> traveler(String accountId) async => object(
+    await client.request(
+      'GET',
+      'profile/travelers/${Uri.encodeComponent(accountId)}',
+    ),
+  );
+  Future<List<Json>> sentInvitations(String tripId) async =>
+      objects(await client.request('GET', 'trips/$tripId/invitations'));
+  Future<Object?> rejectInvite(String tripId) => client.request(
+    'POST',
+    'trips/$tripId/invitations/reject',
+    body: <String, dynamic>{},
+  );
+  Future<Object?> cancelInvite(String tripId, String accountId) =>
+      client.request('DELETE', 'trips/$tripId/invitations/$accountId');
+  Future<List<Json>> tripMessages(String tripId, {int page = 0}) async =>
+      objects(
+        await client.request(
+          'GET',
+          'trips/$tripId/chat',
+          query: {'page': page},
+        ),
+      );
+  Future<Object?> sendTripMessage(String tripId, String text, String key) =>
+      client.request(
+        'POST',
+        'trips/$tripId/chat',
+        body: {'text': text},
+        key: key,
+      );
+  Future<List<Json>> directConversations() async =>
+      objects(await client.request('GET', 'trips/direct-chat'));
+  Future<List<Json>> directMessages(String peer, {int page = 0}) async =>
+      objects(
+        await client.request(
+          'GET',
+          'trips/direct-chat/$peer',
+          query: {'page': page},
+        ),
+      );
+  Future<Object?> sendDirectMessage(String peer, String text, String key) =>
+      client.request(
+        'POST',
+        'trips/direct-chat/$peer',
+        body: {'text': text},
+        key: key,
+      );
+  Future<Object?> readDirectMessages(String peer, String messageId) =>
+      client.request('PUT', 'trips/direct-chat/$peer/read/$messageId');
+  Future<Object?> chatTyping(String id, {required bool direct}) =>
+      client.request(
+        'POST',
+        direct ? 'trips/direct-chat/$id/typing' : 'trips/$id/chat/typing',
+      );
+
   Future<List<Json>> members(String tripId) async =>
       objects(await client.request('GET', 'trips/$tripId/members'));
   Future<Object?> invite(String tripId, String accountId, String role) =>
@@ -405,11 +466,59 @@ class TravelRepository {
       query: {'page': page},
     ),
   );
-  Future<Object?> reminder(String title, String dueAt) => client.request(
-    'POST',
-    'notifications/reminders',
-    body: {'title': title, 'dueAt': dueAt},
+  Future<Object?> reminder(String title, String dueAt) async {
+    final result = await client.request(
+      'POST',
+      'notifications/reminders',
+      body: {'title': title, 'dueAt': dueAt},
+    );
+    await _scheduleDeviceReminder({
+      ...object(result),
+      'title': title,
+      'dueAt': dueAt,
+    });
+    return result;
+  }
+
+  Future<void> _scheduleDeviceReminder(Json row) async {
+    try {
+      await deviceNotifications?.reminder(_notificationScope, row);
+    } catch (_) {
+      // The server reminder remains saved if device scheduling is unavailable.
+    }
+  }
+
+  Future<Object?> updateReminder(String id, String title, String dueAt) async {
+    final result = await client.request(
+      'PUT',
+      'notifications/reminders/$id',
+      body: {'title': title, 'dueAt': dueAt},
+    );
+    await _scheduleDeviceReminder({'id': id, 'title': title, 'dueAt': dueAt});
+    return result;
+  }
+
+  Future<Object?> cancelReminder(String id) async {
+    final result = await client.request(
+      'DELETE',
+      'notifications/reminders/$id',
+    );
+    try {
+      await deviceNotifications?.cancel(_notificationScope, id);
+    } catch (_) {
+      // Server cancellation succeeded. Device state can be reconciled on refresh.
+    }
+    return result;
+  }
+
+  Future<int> unreadNotifications() async => integer(
+    object(await client.request('GET', 'notifications/unread')),
+    'count',
   );
+  Future<Object?> readNotification(String id) =>
+      client.request('PUT', 'notifications/deliveries/$id/read');
+  Future<Object?> readNotifications() =>
+      client.request('PUT', 'notifications/deliveries/read');
   Future<Object?> registerDevice(String token, String platform) =>
       client.request(
         'POST',

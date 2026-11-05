@@ -18,7 +18,12 @@ class RemoteContent<T> extends StatefulWidget {
 
 class _RemoteContentState<T> extends State<RemoteContent<T>> {
   late Future<T> future = widget.load();
-  void refresh() => setState(() => future = widget.load());
+  void refresh() {
+    final next = widget.load();
+    setState(() {
+      future = next;
+    });
+  }
   @override
   Widget build(BuildContext context) => FutureBuilder<T>(
     future: future,

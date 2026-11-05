@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/providers.dart';
 import 'adventure_repository.dart';
+import '../maps/map_location.dart';
 
 final adventureRepositoryProvider = Provider(
   (ref) => AdventureRepository(ref.watch(apiProvider)),
@@ -28,9 +29,8 @@ final adventureLocationProvider = Provider<Future<Json> Function()>(
       );
     }
     final p = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 20),
+      locationSettings: journeyGpsSettings(
+        timeLimit: const Duration(seconds: 20),
       ),
     );
     return {

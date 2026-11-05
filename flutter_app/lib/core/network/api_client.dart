@@ -90,6 +90,12 @@ class ApiClient {
   Future<void>? _refreshing;
   void Function()? onSessionExpired;
   bool get authenticated => _tokens != null;
+
+  Map<String, dynamic> get realtimeHeaders => {
+    if (_tokens != null) 'Authorization': 'Bearer ${_tokens!['accessToken']}',
+    if (dio.options.headers.containsKey('ngrok-skip-browser-warning'))
+      'ngrok-skip-browser-warning': '1',
+  };
   Json? get cachedProfile =>
       _tokens?['profile'] is Map ? object(_tokens!['profile']) : null;
   Future<void> rememberProfile(Json profile) async {

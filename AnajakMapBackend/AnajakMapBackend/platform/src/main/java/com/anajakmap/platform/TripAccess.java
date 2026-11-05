@@ -23,6 +23,14 @@ public class TripAccess {
         .toBodilessEntity();
   }
 
+  public String directChatScope(String peer, String bearer) {
+    var response = client.get().uri("/api/v1/trips/direct-chat/{peer}/access", peer)
+        .header("Authorization", bearer).retrieve().body(java.util.Map.class);
+    if (response != null && response.get("data") instanceof java.util.Map<?, ?> data
+        && data.get("scope") instanceof String scope) return scope;
+    throw Api.denied();
+  }
+
   public java.util.Set<String> members(String trip, String bearer) {
     java.util.Map response =
         client

@@ -15,7 +15,7 @@ String tripDates(BuildContext context, Trip trip) =>
     '${DateFormat.MMMd(context.isKhmer ? 'km' : 'en').format(trip.start)} – ${DateFormat.MMMd(context.isKhmer ? 'km' : 'en').format(trip.end)}';
 
 class PageBody extends StatelessWidget {
-  const PageBody({super.key, required this.children, this.padding = 24});
+  const PageBody({super.key, required this.children, this.padding = 20});
   final List<Widget> children;
   final double padding;
   @override
@@ -37,7 +37,7 @@ class PageBody extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: children,
         ),
       ),
@@ -199,26 +199,28 @@ class ActionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.dense = false,
   });
   final IconData icon;
   final String title, subtitle;
   final VoidCallback onTap;
+  final bool dense;
   @override
   Widget build(BuildContext context) => Card(
     child: InkWell(
       borderRadius: BorderRadius.circular(Tokens.radius),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.all(dense ? 12 : 18),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(dense ? 9 : 12),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, size: 24),
+              child: Icon(icon, size: dense ? 21 : 24),
             ),
             const SizedBox(width: 14),
             Expanded(

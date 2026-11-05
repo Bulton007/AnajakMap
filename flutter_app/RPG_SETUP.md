@@ -23,23 +23,47 @@ Device practice is never uploaded. Server practice requires
 `RPG_SIMULATION_ENABLED=true` AND the backend dev or test profile. The local compose
 override enables it. Never deploy the dev compose configuration to production.
 Seeded Royal Palace, National Museum and Wat Phnom IDs match discovery fixtures.
-They are unreviewed, with field gameplay disabled. Server practice uses these
-three temple habitats. Beach species are in the bestiary and device practice;
-a server beach destination must be configured before server beach encounters work.
+They remain unreviewed and are not enabled as public field locations. Server
+practice uses these three temple habitats. Personal journey stops use all six
+species with the existing server rarity weights; this does not assert a real
+habitat at the player's coordinates.
 
-The game entry now offers a visible **Play practice** action when account practice
-is enabled. It selects the first trail unlocked at the player's level, retains the
-server-owned starter companion and asks for an explicit practice acknowledgement.
-When account practice is disabled, **Play on this device** opens the separate local
-temple/beach practice game. Device practice never creates account rewards.
+The normal game entry opens the real account flow and offers **Track journey**.
+Start tracking explicitly to show the real GPS position and route on OpenStreetMap.
+Points save privately to the authenticated account, at most once per 15 seconds.
+Two fixes 10–45 seconds apart within 25 m establish a visited stop. A personal
+stop uses the actual accepted coordinates, a 100 m encounter radius, and the
+existing server-owned battle, capture, quest and reward rules. Revisited stops
+are reused rather than creating duplicate locations within 75 m. Encounter
+creation still requires fresh, accurate, non-mocked GPS within the radius and
+explicit stationary/safe confirmation. Server randomness selects the creature;
+the existing five-minute cooldown and ten-encounter daily limit still apply.
+
+Tracking pauses when the journey screen closes or the app leaves the foreground;
+resume is explicit. It does not request background location permission. Recorded
+route segments break at sampling gaps over 45 seconds, and untracked gaps do not
+increase recorded distance. A journey is limited to 3,000 points; end it and start
+another when full. This is GPS journey recording, not background navigation.
+Android journey fixes and encounter checks use the native GPS location manager;
+Google's optional network Location Accuracy service is not required.
+
+Normal field lists/maps include approved public locations and only the signed-in
+player's GPS stops. Stops do not approve the original fixtures or become visible
+to other players. Practice remains separate.
+
+Developer practice entry controls require an explicit
+`--dart-define=RPG_PRACTICE_TOOLS=true` in a non-release build. Release builds never
+show these controls, even with the flag. Backend simulation permissions still
+apply independently. Developer tests explicitly opt in; practice rewards remain
+separate and never become field rewards.
 
 The laptop hosting overlay defaults server practice to disabled and reads an
 explicit `RPG_SIMULATION_ENABLED` setting from the existing private `.env`.
 For local testing, set it true with the existing dev/test profile and recreate
 `discovery-service`; never deploy the dev compose configuration as production.
 Do not approve fixture destinations or bypass GPS checks. The Flutter
-screen explains why field encounters are unavailable instead of leaving only a
-disabled start button. A server cooldown is displayed before another encounter,
+screen directs players to track a journey before their first encounter.
+A server cooldown is displayed before another encounter,
 and battle results link to the authoritative collection and confirmed reward history.
 
 ## Run locally
@@ -71,12 +95,23 @@ was not performed on this Windows host. Never embed real credentials in Dart def
 
 ## API and database
 
+Journey rollout requires Oracle migration `V5__rpg_journeys.sql` (PostgreSQL:
+`V2__rpg_journeys.sql`). Run schema migrations as the schema owner, then grant the
+runtime user SELECT/INSERT/UPDATE on `rpg_journeys` and SELECT/INSERT on
+`rpg_journey_points` and `rpg_journey_visits`. The regular runtime role has Flyway
+disabled. The local collaboration overlay includes `discovery-service:journey-v1`;
+rebuild that image after backend source changes. No test fixtures need approval.
+
 Gateway routes rpg to discovery-service. All endpoints require the existing JWT;
 identity comes from its subject. Responses retain `{data, traceId, timestamp}`.
 
 | Method | Path under /api/v1/rpg | Purpose |
 | --- | --- | --- |
 | GET | /capabilities | Simulation/redemption availability |
+| GET | /journey | Latest personal journey and recorded route |
+| POST | /journey/start | Start or resume an account journey |
+| POST | /journey/{id}/points | Save a fresh GPS fix and discover a stationary stop |
+| POST | /journey/{id}/stop | End a personal journey |
 | GET | /{realm}/world | Destination rules and review flags |
 | GET | /{realm}/profile | Progress, collection, species, quests, ledger, active session |
 | POST | /{realm}/encounters | destinationId, monsterId, safeConfirmed, optional location |

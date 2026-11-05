@@ -46,7 +46,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ),
         GoRoute(path: '/rpg', builder: (_, s) => const RpgScreen()),
-        GoRoute(path: '/map', builder: (_, s) => const OpenMapScreen()),
+        GoRoute(
+          path: '/map',
+          builder: (_, s) => OpenMapScreen(
+            selectedPlace: s.extra is MapPlace ? s.extra! as MapPlace : null,
+          ),
+        ),
         GoRoute(path: '/auth', builder: (_, s) => const AuthenticationScreen()),
         GoRoute(path: '/guest', builder: (_, s) => const AuthGuestScreen()),
         GoRoute(path: '/connected', builder: (_, s) => const ConnectedGate()),
@@ -67,7 +72,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/rpg', builder: (_, s) => const RpgScreen()),
-      GoRoute(path: '/map', builder: (_, s) => const OpenMapScreen()),
+      GoRoute(
+        path: '/map',
+        builder: (_, s) => OpenMapScreen(
+          selectedPlace: s.extra is MapPlace ? s.extra! as MapPlace : null,
+        ),
+      ),
       GoRoute(path: '/welcome', builder: (_, s) => const OnboardingScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),

@@ -98,16 +98,16 @@ abstract final class Tokens {
           : const Color(0xFFF6F5EE),
       textTheme: base.textTheme.copyWith(
         headlineLarge: base.textTheme.headlineLarge!.copyWith(
-          fontSize: 34,
+          fontSize: 28,
           fontWeight: FontWeight.w600,
           height: 1.4,
-          letterSpacing: -1.3,
+          letterSpacing: 0,
         ),
         headlineMedium: base.textTheme.headlineMedium!.copyWith(
-          fontSize: 26,
+          fontSize: 23,
           fontWeight: FontWeight.w600,
           height: 1.45,
-          letterSpacing: -.6,
+          letterSpacing: 0,
         ),
         titleLarge: base.textTheme.titleLarge!.copyWith(
           fontSize: 20,

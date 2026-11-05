@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ public class DeliveryWorker {
   private final JdbcTemplate jdbc;
   private final String url, key;
   private final boolean dev;
+  @org.springframework.beans.factory.annotation.Autowired private StringRedisTemplate redis;
 
   public DeliveryWorker(
       Changes c,
@@ -69,24 +71,39 @@ public class DeliveryWorker {
     org.slf4j.MDC.put("traceId", trace == null ? id : trace.toString());
     try {
       String kind = m.getMessageProperties().getReceivedRoutingKey();
-      if (Set.of("itinerary.approved", "group.invited").contains(kind)) {
+      String title = switch (kind) {
+        case "itinerary.approved" -> "Your itinerary is approved";
+        case "group.invited" -> "You have a trip invitation";
+        case "group.joined" -> "Trip invitation accepted";
+        case "group.invitation-rejected" -> "Trip invitation declined";
+        case "group.invitation-cancelled" -> "Trip invitation cancelled";
+        case "chat.trip-message" -> "New trip chat message";
+        case "chat.direct-message" -> "New private message";
+        default -> null;
+      };
+      if (title != null) {
         Map event =
             new com.fasterxml.jackson.databind.ObjectMapper().readValue(m.getBody(), Map.class);
         Map fields = (Map) event.get("fields");
-        String recipient =
-            kind.equals("group.invited")
-                ? fields.get("accountId").toString()
-                : event.get("actor").toString();
-        String delivery = UUID.randomUUID().toString();
-        jdbc.update(
-            "INSERT INTO deliveries(id,owner_id,title,due_at,status,next_attempt)"
-                + " VALUES(?,?,?,CURRENT_TIMESTAMP,'PENDING',CURRENT_TIMESTAMP)",
-            delivery,
-            recipient,
-            kind.equals("group.invited")
-                ? "You have a trip invitation"
-                : "Your itinerary is approved");
-        changes.record(recipient, "reminder.event-created", delivery, Map.of("sourceEvent", id));
+        boolean itinerary = kind.equals("itinerary.approved");
+        Object recipientValue = itinerary ? event.get("actor") : fields.get("accountId");
+        List<String> recipients = fields.get("recipients") instanceof List<?> list
+            ? list.stream().map(Object::toString).distinct().toList()
+            : recipientValue == null ? List.of() : List.of(recipientValue.toString());
+        for (String recipient : recipients) {
+          String delivery = UUID.randomUUID().toString();
+          jdbc.update(
+              "INSERT INTO deliveries(id,owner_id,title,due_at,status,next_attempt,kind,trip_id,actor_id,detail)"
+                  + " VALUES(?,?,?,CURRENT_TIMESTAMP,'PENDING',CURRENT_TIMESTAMP,?,?,?,?)",
+              delivery, recipient, title, kind,
+              kind.equals("chat.direct-message") ? null : event.get("entityId"),
+              event.get("actor"), fields.get("tripTitle"));
+          changes.record(recipient, "reminder.event-created", delivery, Map.of("sourceEvent", id));
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+              @Override public void afterCommit() { recipients.forEach(DeliveryWorker.this::signal); }
+            });
       }
     } catch (java.io.IOException e) {
       throw new IllegalArgumentException("Invalid event", e);
@@ -103,13 +120,13 @@ public class DeliveryWorker {
             + " updated_at<CURRENT_TIMESTAMP-NUMTODSINTERVAL(120,'SECOND')");
     var rows =
         jdbc.queryForList(
-            "SELECT id,owner_id,title,attempts FROM deliveries WHERE status='PENDING' AND"
+            "SELECT id,owner_id,attempts FROM deliveries WHERE status='PENDING' AND"
                 + " next_attempt<=CURRENT_TIMESTAMP FETCH FIRST 20 ROWS ONLY");
     for (var r : rows) {
       String id = r.get("ID").toString();
       if (jdbc.update(
               "UPDATE deliveries SET status='SENDING',attempts=attempts+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND"
-                  + " status='PENDING'",
+                  + " status='PENDING' AND next_attempt<=CURRENT_TIMESTAMP",
               id)
           != 1) continue;
       try {
@@ -128,7 +145,7 @@ public class DeliveryWorker {
                       "tokens",
                       tokens.stream().map(vault::decrypt).toList(),
                       "title",
-                      r.get("TITLE")))
+                      jdbc.queryForObject("SELECT title FROM deliveries WHERE id=?", String.class, id)))
               .retrieve()
               .toBodilessEntity();
         }
@@ -136,6 +153,7 @@ public class DeliveryWorker {
             "UPDATE deliveries SET status=?,delivered_at=CURRENT_TIMESTAMP WHERE id=?",
             dev ? "MOCK_DELIVERED" : "DELIVERED",
             id);
+        signal(r.get("OWNER_ID").toString());
       } catch (Exception e) {
         int n = ((Number) r.get("ATTEMPTS")).intValue() + 1;
         jdbc.update(
@@ -147,6 +165,15 @@ public class DeliveryWorker {
             Math.min(300, 1 << n),
             id);
       }
+    }
+  }
+
+  private void signal(String account) {
+    if (redis == null) return;
+    try {
+      redis.convertAndSend("anajak.notifications", account);
+    } catch (org.springframework.dao.DataAccessException ex) {
+      org.slf4j.LoggerFactory.getLogger(DeliveryWorker.class).warn("Notification live signal unavailable");
     }
   }
 }

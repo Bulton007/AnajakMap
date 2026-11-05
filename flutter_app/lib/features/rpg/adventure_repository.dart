@@ -29,6 +29,7 @@ class AdventureRepository {
   final ApiClient api;
   Future<Json> capabilities() async =>
       object(await api.request('GET', 'rpg/capabilities'));
+  Future<Json> journey() async => object(await api.request('GET', 'rpg/journey'));
   Future<List<Json>> world(String realm) async =>
       objects(await api.request('GET', 'rpg/$realm/world'));
   Future<AdventureSnapshot> profile(String realm) async =>

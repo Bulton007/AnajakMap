@@ -275,6 +275,15 @@ public class Auth {
     return Map.of("reset", true);
   }
 
+  @GetMapping("/profile/travelers/{accountId}")
+  public Map<String, String> traveler(
+      @PathVariable UUID accountId, @AuthenticationPrincipal Jwt jwt) {
+    limit.check("traveler-lookup:" + Changes.hash(jwt.getSubject()), 30, 60);
+    var account = accounts.findById(accountId.toString()).filter(a -> a.verified)
+        .orElseThrow(Api::missing);
+    return Map.of("id", account.id, "displayName", Objects.toString(account.displayName, ""));
+  }
+
   @GetMapping("/profile")
   public Map<String, Object> profile(@AuthenticationPrincipal Jwt jwt) {
     var a = accounts.findById(jwt.getSubject()).orElseThrow(Api::missing);

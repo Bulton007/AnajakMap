@@ -41,6 +41,7 @@ class VisualHero extends StatelessWidget {
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(28),
     child: Stack(
+      fit: StackFit.passthrough,
       children: [
         Positioned.fill(
           child: Image.asset(
@@ -64,8 +65,9 @@ class VisualHero extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(
@@ -73,7 +75,7 @@ class VisualHero extends StatelessWidget {
                 color: Color(0xFFF8DB9B),
                 size: 32,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               Text(
                 caption,
                 style: const TextStyle(
@@ -105,11 +107,12 @@ class VisualAction extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.compact = false,
+    this.horizontal = false,
   });
   final IconData icon;
   final String label;
   final String? subtitle;
-  final bool compact;
+  final bool compact, horizontal;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
@@ -123,6 +126,32 @@ class VisualAction extends StatelessWidget {
     };
     final accent = Tokens.accent(context, tone);
     final colors = Theme.of(context).colorScheme;
+    if (horizontal) {
+      return Card(
+        color: colors.surface,
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          leading: DecoratedBox(
+            decoration: BoxDecoration(
+              color: accent.background,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Icon(icon, color: accent.foreground),
+            ),
+          ),
+          title: Text(label, style: Theme.of(context).textTheme.titleMedium),
+          subtitle: subtitle == null ? null : Text(subtitle!),
+          trailing: Icon(
+            onTap == null ? Icons.info_outline : Icons.chevron_right_rounded,
+            color: onTap == null ? colors.onSurfaceVariant : accent.foreground,
+          ),
+          onTap: onTap,
+        ),
+      );
+    }
     return Card(
       color: colors.surface,
       margin: EdgeInsets.zero,

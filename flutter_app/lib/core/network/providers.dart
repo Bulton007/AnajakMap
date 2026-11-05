@@ -4,6 +4,7 @@ import '../storage/travel_database.dart';
 import '../storage/place_photo_cache.dart';
 import 'api_client.dart';
 import 'travel_repository.dart';
+import '../notifications/device_notifications.dart';
 
 final environmentProvider = Provider((ref) => const Environment());
 final apiProvider = Provider((ref) {
@@ -12,8 +13,16 @@ final apiProvider = Provider((ref) {
   ref.onDispose(() => client.dio.close());
   return client;
 });
+final notificationUpdateProvider = Provider<Object>((ref) => Object());
+final deviceNotificationsProvider = Provider((ref) => DeviceNotifications());
+final travelerProvider = FutureProvider.autoDispose.family<Json, String>(
+  (ref, id) => ref.watch(repositoryProvider).traveler(id),
+);
 final repositoryProvider = Provider(
-  (ref) => TravelRepository(ref.watch(apiProvider)),
+  (ref) => TravelRepository(
+    ref.watch(apiProvider),
+    deviceNotifications: ref.watch(deviceNotificationsProvider),
+  ),
 );
 final guideCapabilitiesProvider = FutureProvider.autoDispose<Json>(
   retry: (count, error) => null,

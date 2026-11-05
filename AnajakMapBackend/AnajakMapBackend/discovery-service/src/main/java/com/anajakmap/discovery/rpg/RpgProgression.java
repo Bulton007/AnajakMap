@@ -63,7 +63,7 @@ final class RpgProgression {
   }
   List<Map<String,Object>> party(String scope){return db.queryForList("SELECT slot,monster_id FROM rpg_party WHERE scope_id=? ORDER BY slot",scope);}
   List<Map<String,Object>> exploration(String scope) {
-    return db.queryForList("SELECT d.id,d.name,d.boss_unlock_wins,(SELECT COUNT(*) FROM rpg_sessions s WHERE s.scope_id=? AND s.destination_id=d.id AND s.status IN ('won','captured')) AS successes,(SELECT COUNT(*) FROM rpg_sessions s WHERE s.scope_id=? AND s.destination_id=d.id AND s.status='won' AND s.kind='boss') AS bosses FROM rpg_destinations d ORDER BY d.name",scope,scope);
+    return db.queryForList("SELECT d.id,d.name,d.boss_unlock_wins,(SELECT COUNT(*) FROM rpg_sessions s WHERE s.scope_id=? AND s.destination_id=d.id AND s.status IN ('won','captured')) AS successes,(SELECT COUNT(*) FROM rpg_sessions s WHERE s.scope_id=? AND s.destination_id=d.id AND s.status='won' AND s.kind='boss') AS bosses FROM rpg_destinations d WHERE d.habitat<>'roaming' OR d.id IN (SELECT destination_id FROM rpg_journey_visits WHERE scope_id=?) ORDER BY d.name",scope,scope,scope);
   }
   List<Quest> quests(String scope) {
     var today=LocalDate.now(clock);var week=today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));

@@ -310,7 +310,7 @@ class ConnectedPlace extends ConsumerWidget {
       children: [
         Text(
           string(place, 'name'),
-          style: Theme.of(context).textTheme.headlineLarge,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 18),
         PlaceFacts(place: place),

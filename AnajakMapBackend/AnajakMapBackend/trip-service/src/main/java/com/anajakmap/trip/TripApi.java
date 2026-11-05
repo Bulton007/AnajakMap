@@ -21,6 +21,12 @@ public class TripApi {
   private final JdbcTemplate jdbc;
   private final Changes changes;
   private final String serviceToken;
+  private org.springframework.web.client.RestClient travelers;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void travelerDirectory(@Value("${IDENTITY_URL:http://identity-service:8081}") String url) {
+    travelers = HttpClients.client(url);
+  }
 
   public TripApi(Trips t, JdbcTemplate j, Changes c, @Value("${anajak.service-token}") String st) {
     trips = t;
@@ -50,7 +56,7 @@ public class TripApi {
   public record Approve(@NotBlank String itineraryId, long version, Long baseVersion) {}
 
   public record Invite(
-      @NotBlank String accountId, @Pattern(regexp = "EDITOR|VIEWER") String role) {}
+      @NotBlank String accountId, @NotNull @Pattern(regexp = "EDITOR|VIEWER") String role) {}
 
   public record Vote(@NotBlank String activityId, @Min(-1) @Max(1) int value) {}
 
@@ -286,32 +292,110 @@ public class TripApi {
         jdbc.queryForList("SELECT label,phone FROM essential_contacts WHERE trip_id=?", id));
   }
 
+  @GetMapping("/invitations")
+  public Object invitations(@AuthenticationPrincipal Jwt jwt) {
+    return jdbc.queryForList(
+        "SELECT t.id AS trip_id,t.title,t.destination,t.owner_id AS inviter_id,m.role"
+            + " FROM trip_members m JOIN trips t ON t.id=m.trip_id"
+            + " WHERE m.account_id=? AND m.invitation_status='PENDING' ORDER BY t.start_date,t.id",
+        jwt.getSubject());
+  }
+
+  @GetMapping("/{id}/invitations")
+  public Object sentInvitations(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+    owner(id, jwt.getSubject());
+    return jdbc.queryForList(
+        "SELECT account_id,role,invitation_status AS status FROM trip_members WHERE trip_id=?"
+            + " ORDER BY account_id", id);
+  }
+
   @PostMapping("/{id}/invitations")
   @Transactional
   public Map<String, String> invite(
-      @PathVariable String id, @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody Invite r) {
-    var t = require(id, jwt.getSubject(), true);
-    if (!t.ownerId.equals(jwt.getSubject()) || r.accountId.equals(t.ownerId)) throw Api.denied();
-    jdbc.update(
-        "INSERT INTO trip_members(trip_id,account_id,role,accepted) VALUES(?,?,?,0)",
-        id,
-        r.accountId,
-        r.role);
-    changes.record(
-        jwt.getSubject(), "group.invited", id, Map.of("accountId", r.accountId, "role", r.role));
+      @PathVariable String id, @AuthenticationPrincipal Jwt jwt,
+      @RequestHeader("Authorization") String bearer, @Valid @RequestBody Invite r) {
+    String actor = jwt.getSubject();
+    Trip trip = owner(id, actor);
+    String recipient = UUID.fromString(r.accountId.strip()).toString();
+    if (recipient.equals(actor)) throw Api.denied();
+    String status = lockInvitation(id, recipient);
+    if (Set.of("PENDING", "ACCEPTED").contains(status))
+      return Map.of("status", status.equals("PENDING") ? "INVITED" : status);
+    requireTraveler(recipient, bearer);
+    if (status.isEmpty()) {
+      jdbc.update("INSERT INTO trip_members(trip_id,account_id,role,accepted) VALUES(?,?,?,0)",
+          id, recipient, r.role);
+    } else {
+      jdbc.update("UPDATE trip_members SET invitation_status='PENDING',role=?"
+          + " WHERE trip_id=? AND account_id=?", r.role, id, recipient);
+    }
+    inviteEvent(actor, "group.invited", trip, recipient);
     return Map.of("status", "INVITED");
+  }
+
+  void requireTraveler(String accountId, String bearer) {
+    travelers.get().uri("/api/v1/profile/travelers/{accountId}", accountId)
+        .header("Authorization", bearer).retrieve().toBodilessEntity();
   }
 
   @PostMapping("/{id}/invitations/accept")
   @Transactional
   public Map<String, String> accept(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
-    if (jdbc.update(
-            "UPDATE trip_members SET accepted=1 WHERE trip_id=? AND account_id=? AND accepted=0",
-            id,
-            jwt.getSubject())
-        != 1) throw Api.missing();
-    changes.record(jwt.getSubject(), "group.joined", id, Map.of());
+    respond(id, jwt.getSubject(), "ACCEPTED", "group.joined");
     return Map.of("status", "JOINED");
+  }
+
+  @PostMapping("/{id}/invitations/reject")
+  @Transactional
+  public Map<String, String> reject(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+    respond(id, jwt.getSubject(), "REJECTED", "group.invitation-rejected");
+    return Map.of("status", "REJECTED");
+  }
+
+  @DeleteMapping("/{id}/invitations/{accountId}")
+  @Transactional
+  public Map<String, String> cancelInvitation(@PathVariable String id, @PathVariable String accountId,
+      @AuthenticationPrincipal Jwt jwt) {
+    Trip trip = owner(id, jwt.getSubject());
+    if (transition(id, accountId, "CANCELLED")) {
+      inviteEvent(jwt.getSubject(), "group.invitation-cancelled", trip, accountId);
+    }
+    return Map.of("status", "CANCELLED");
+  }
+
+  private Trip owner(String id, String actor) {
+    Trip trip = require(id, actor, false);
+    if (!trip.ownerId.equals(actor)) throw Api.denied();
+    return trip;
+  }
+
+  private String lockInvitation(String id, String recipient) {
+    jdbc.queryForList("SELECT id FROM trips WHERE id=? FOR UPDATE", id);
+    return jdbc.queryForList(
+        "SELECT invitation_status FROM trip_members WHERE trip_id=? AND account_id=?",
+        String.class, id, recipient).stream().findFirst().orElse("");
+  }
+
+  private boolean transition(String id, String recipient, String target) {
+    String status = lockInvitation(id, recipient);
+    if (status.isEmpty()) throw Api.missing();
+    if (status.equals(target)) return false;
+    if (!status.equals("PENDING")) throw Api.conflict();
+    jdbc.update("UPDATE trip_members SET invitation_status=?,accepted=? WHERE trip_id=? AND account_id=?",
+        target, target.equals("ACCEPTED") ? 1 : 0, id, recipient);
+    return true;
+  }
+
+  private void respond(String id, String recipient, String target, String event) {
+    if (transition(id, recipient, target)) {
+      Trip trip = trips.findById(id).orElseThrow(Api::missing);
+      inviteEvent(recipient, event, trip, trip.ownerId);
+    }
+  }
+
+  private void inviteEvent(String actor, String event, Trip trip, String recipient) {
+    changes.record(actor, event, trip.id, Map.of(
+        "accountId", recipient, "tripTitle", trip.title, "tripId", trip.id));
   }
 
   @PostMapping("/{id}/votes")
@@ -498,7 +582,7 @@ public class TripApi {
       @PathVariable String id, @PathVariable String member, @AuthenticationPrincipal Jwt jwt) {
     Trip t = require(id, jwt.getSubject(), true);
     if (!t.ownerId.equals(jwt.getSubject())) throw Api.denied();
-    jdbc.update("DELETE FROM trip_members WHERE trip_id=? AND account_id=?", id, member);
+    jdbc.update("DELETE FROM trip_members WHERE trip_id=? AND account_id=? AND accepted=1", id, member);
     jdbc.update("DELETE FROM shared_locations WHERE trip_id=? AND account_id=?", id, member);
     changes.record(jwt.getSubject(), "group.member-removed", id, Map.of("accountId", member));
   }

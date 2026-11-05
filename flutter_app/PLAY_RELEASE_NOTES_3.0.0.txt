@@ -1,0 +1,9 @@
+What's new in Anajak 3.0.0
+
+• Track your journey on the map and discover random creatures at places you visit.
+• Save your creatures, battles and rewards to your account.
+• Trip invitations, private messages and notification reminders.
+• Open explored places directly in the in-app map.
+• Refined layouts, clearer dates, and improved English and Khmer support.
+
+Journey tracking pauses when leaving the journey screen or putting the app in the background.

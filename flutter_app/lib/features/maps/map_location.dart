@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class MapLocationIssue implements Exception {
@@ -32,8 +33,29 @@ abstract class MapLocationAccess {
 final mapLocationProvider = Provider<MapLocationAccess>(
   (ref) => _DeviceLocation(),
 );
+// GPS journeys must not require enrolling in an optional network-location service.
+LocationSettings journeyGpsSettings({Duration? timeLimit}) =>
+    defaultTargetPlatform == TargetPlatform.android
+    ? AndroidSettings(
+        forceLocationManager: true,
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
+        intervalDuration: const Duration(seconds: 5),
+        timeLimit: timeLimit,
+      )
+    : LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
+        timeLimit: timeLimit,
+      );
+
+final gpsLocationProvider = Provider<MapLocationAccess>(
+  (ref) => _DeviceLocation(gpsOnly: true),
+);
 
 class _DeviceLocation implements MapLocationAccess {
+  _DeviceLocation({this.gpsOnly = false});
+  final bool gpsOnly;
   @override
   Future<Position> current({bool requestPermission = true}) async {
     if (!await Geolocator.isLocationServiceEnabled()) {
@@ -51,10 +73,12 @@ class _DeviceLocation implements MapLocationAccess {
     }
     return validatedMapPosition(
       await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
+        locationSettings: gpsOnly
+            ? journeyGpsSettings(timeLimit: const Duration(seconds: 20))
+            : const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 20),
+              ),
       ),
     );
   }

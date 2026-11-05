@@ -33,18 +33,15 @@ final mapTileFactoryProvider = Provider<TileProvider Function()>(
 );
 
 class OpenMapScreen extends ConsumerWidget {
-  const OpenMapScreen({super.key});
+  const OpenMapScreen({super.key, this.selectedPlace});
+  final MapPlace? selectedPlace;
   @override
   Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        Localizations.localeOf(context).languageCode == 'km' ? 'ផែនទី' : 'Map',
-      ),
-    ),
     body: SafeArea(
       child: TravelOpenMap(
         navigation: true,
         places: [
+          if (selectedPlace?.valid == true) selectedPlace!,
           for (final p in ref.watch(searchResultsProvider))
             if (field(p, 'latitude') is num && field(p, 'longitude') is num)
               MapPlace(
@@ -581,7 +578,7 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
       // Keep the normal phone controls short. Larger text gets full-width
       // selectors inside the scrollable panel instead of unreadable fields.
       final sideBySide =
-          constraints.maxWidth >= 280 &&
+          constraints.maxWidth >= 260 &&
           MediaQuery.textScalerOf(context).scale(14) <= 21;
       final origin = _placeSelector(valid, origin: true);
       final destination = _placeSelector(valid, origin: false);
@@ -617,16 +614,6 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
         ),
       ],
       if (widget.navigation) ...[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('map-search-destination'),
-            onPressed: routing ? null : searchDestination,
-            icon: const Icon(Icons.search),
-            label: Text(t('Search destination', 'ស្វែងរកគោលដៅ')),
-          ),
-        ),
-        const SizedBox(height: 8),
         IntrinsicHeight(
           child: Row(
             key: const ValueKey('map-pick-actions-row'),
@@ -854,20 +841,20 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
     return LayoutBuilder(
       builder: (context, constraints) {
         final panelHeight = constraints.maxHeight.isFinite
-            ? math.max(64.0, math.min(272.0, constraints.maxHeight * .38))
-            : 272.0;
-        return Column(
-          children: [
-            if (widget.navigation || failed)
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: panelHeight),
-                child: SingleChildScrollView(
-                  key: const ValueKey('map-controls-scroll'),
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                  child: _routeControls(valid),
+            ? math.max(
+                64.0,
+                math.min(
+                  272.0,
+                  constraints.maxHeight *
+                      (MediaQuery.textScalerOf(context).scale(14) > 21
+                          ? .48
+                          : .34),
                 ),
-              ),
-            Expanded(
+              )
+            : 272.0;
+        return Stack(
+          children: [
+            Positioned.fill(
               child: Stack(
                 key: const ValueKey('map-viewport'),
                 children: [
@@ -877,6 +864,11 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
                       options: MapOptions(
                         onMapReady: () => routeReady = true,
                         onTap: (_, point) => pinOnMap(point),
+                        onLongPress: (_, point) {
+                          if (!widget.navigation) return;
+                          pickingStart ??= false;
+                          pinOnMap(point);
+                        },
                         initialCenter: valid.isEmpty
                             ? const LatLng(12.5657, 104.9910)
                             : LatLng(
@@ -997,7 +989,7 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
                   ),
                   if (pickingStart == null)
                     Positioned(
-                      top: 12,
+                      top: widget.navigation ? 86 : 12,
                       right: 12,
                       child: MapLayersButton(
                         onPressed: () => chooseLayer(layers, activeLayer),
@@ -1005,7 +997,7 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
                     ),
                   if (pickingStart != null)
                     Positioned(
-                      top: 12,
+                      top: widget.navigation ? 86 : 12,
                       left: 12,
                       right: 12,
                       child: Material(
@@ -1096,6 +1088,60 @@ class _TravelOpenMapState extends ConsumerState<TravelOpenMap>
                 ],
               ),
             ),
+
+            if (widget.navigation)
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  elevation: 3,
+                  borderRadius: BorderRadius.circular(20),
+                  clipBehavior: Clip.antiAlias,
+                  child: Row(
+                    children: [
+                      if (Navigator.canPop(context))
+                        IconButton(
+                          tooltip: t('Back', 'ត្រឡប់ក្រោយ'),
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                        ),
+                      Expanded(
+                        child: TextButton.icon(
+                          key: const ValueKey('map-search-destination'),
+                          onPressed: routing ? null : searchDestination,
+                          icon: const Icon(Icons.search),
+                          label: Text(
+                            t('Search destination', 'ស្វែងរកគោលដៅ'),
+                            maxLines: 2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (widget.navigation || failed)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 60,
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  elevation: 5,
+                  borderRadius: BorderRadius.circular(24),
+                  clipBehavior: Clip.antiAlias,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: panelHeight),
+                    child: SingleChildScrollView(
+                      key: const ValueKey('map-controls-scroll'),
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                      child: _routeControls(valid),
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },

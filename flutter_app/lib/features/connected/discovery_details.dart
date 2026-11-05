@@ -6,6 +6,7 @@ import '../../shared/components/components.dart';
 import '../../shared/components/visual.dart';
 import '../../shared/components/place_photo.dart';
 import '../maps/open_map_screen.dart';
+import '../maps/show_on_map.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 String weatherSummary(Object? value, bool khmer) {
@@ -29,10 +30,12 @@ class PlaceFacts extends StatelessWidget {
   final Json place;
   @override
   Widget build(BuildContext context) {
-    final lat = field(place, 'latitude'), lon = field(place, 'longitude');
+    final target = exploredMapPlace(place);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ShowOnMap(place: place),
+        const SizedBox(height: 12),
         if (place['photo'] is Map) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -43,21 +46,12 @@ class PlaceFacts extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        if (lat is num && lon is num)
+        if (target != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: SizedBox(
               height: 220,
-              child: TravelOpenMap(
-                places: [
-                  MapPlace(
-                    string(place, 'id'),
-                    string(place, 'name'),
-                    lat.toDouble(),
-                    lon.toDouble(),
-                  ),
-                ],
-              ),
+              child: TravelOpenMap(places: [target]),
             ),
           ),
         const SizedBox(height: 16),

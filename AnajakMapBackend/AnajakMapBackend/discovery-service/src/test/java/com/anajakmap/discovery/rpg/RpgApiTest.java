@@ -38,8 +38,16 @@ class RpgApiTest {
   }
   @Test void unauthenticatedCannotReadOrMutate() throws Exception {
     mvc.perform(get("/api/v1/rpg/field/profile")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/v1/rpg/journey")).andExpect(status().isUnauthorized());
+    mvc.perform(post("/api/v1/rpg/journey/start")).andExpect(status().isUnauthorized());
     mvc.perform(post("/api/v1/rpg/practice/encounters").contentType("application/json").content("{}")) .andExpect(status().isUnauthorized());
     verifyNoInteractions(service);
+  }
+  @Test void journeyEndpointsUseTheAuthenticatedActor() throws Exception {
+    when(service.startJourney("alice","journey-key-123")).thenReturn(Map.of("journey",Map.of("ID","journey-1")));
+    mvc.perform(post("/api/v1/rpg/journey/start").header("Authorization",token()).header("Idempotency-Key","journey-key-123"))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.data.journey.ID").value("journey-1"));
+    verify(service).startJourney("alice","journey-key-123");
   }
   @Test void invalidActionsRejectedBeforeBusinessLogic() throws Exception {
     mvc.perform(post("/api/v1/rpg/practice/battles/test/actions").header("Authorization",token()).header("Idempotency-Key","test-key-123").contentType("application/json").content("{\"revision\":-1,\"move\":\"give-gold\"}")) .andExpect(status().isBadRequest());

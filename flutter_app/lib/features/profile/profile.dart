@@ -215,26 +215,54 @@ class PreferencesControls extends ConsumerWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 10),
-        Wrap(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 8,
-          runSpacing: 8,
           children: [
             for (final mode in ThemeMode.values)
-              ChoiceChip(
-                label: Text(context.t(mode.name)),
-                avatar: Icon(
-                  mode == ThemeMode.dark
-                      ? Icons.dark_mode_outlined
-                      : mode == ThemeMode.light
-                      ? Icons.light_mode_outlined
-                      : Icons.brightness_auto_outlined,
-                  size: 17,
+              Material(
+                color: state.theme == mode
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : Theme.of(context).colorScheme.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: state.theme == mode
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outlineVariant,
+                  ),
                 ),
-                selected: state.theme == mode,
-                onSelected: (_) => persist(
-                  context,
-                  () =>
-                      ref.read(appStateProvider.notifier).settings(theme: mode),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  dense: true,
+                  minVerticalPadding: 8,
+                  leading: Icon(switch (mode) {
+                    ThemeMode.system => Icons.brightness_auto_outlined,
+                    ThemeMode.light => Icons.light_mode_outlined,
+                    ThemeMode.dark => Icons.dark_mode_outlined,
+                  }, size: 22),
+                  title: Text(context.t(mode.name)),
+                  subtitle: mode == ThemeMode.system
+                      ? Text(
+                          context.isKhmer
+                              ? 'តាមការកំណត់ឧបករណ៍'
+                              : 'Follow device appearance',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      : null,
+                  trailing: Icon(
+                    state.theme == mode
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  onTap: () => persist(
+                    context,
+                    () => ref
+                        .read(appStateProvider.notifier)
+                        .settings(theme: mode),
+                  ),
                 ),
               ),
           ],
@@ -250,8 +278,13 @@ Future<void> showPreferences(BuildContext context) =>
       showDragHandle: true,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (c) => const Padding(
-        padding: EdgeInsets.all(24),
-        child: SingleChildScrollView(child: PreferencesControls()),
+      builder: (c) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(c).height * .8,
+        ),
+        child: const SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 28),
+          child: PreferencesControls(),
+        ),
       ),
     );

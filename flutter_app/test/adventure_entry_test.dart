@@ -12,6 +12,7 @@ import 'adventure_test.dart' show AdventureFixture, SignedIn, session;
 class EntryFixture extends AdventureFixture {
   bool practiceEnabled = true;
   bool fieldUnavailable = false;
+  bool reviewed = false;
   DateTime? nextEncounter;
   @override
   Future<Json> capabilities() async => {'practiceEnabled': practiceEnabled};
@@ -24,7 +25,14 @@ class EntryFixture extends AdventureFixture {
         status: 503,
       );
     }
-    return super.world(realm);
+    return [
+      for (final destination in await super.world(realm))
+        {
+          ...destination,
+          if (reviewed) 'APPROVED': 1,
+          if (reviewed) 'ACCESSIBLE': 1,
+        },
+    ];
   }
 
   @override
@@ -45,6 +53,7 @@ Future<void> openAdventure(
   WidgetTester tester,
   EntryFixture repo, {
   Future<Json> Function()? location,
+  bool practiceTools = true,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -59,7 +68,7 @@ Future<void> openAdventure(
           data: MediaQuery.of(context).copyWith(disableAnimations: true),
           child: child!,
         ),
-        home: const AdventureScreen(),
+        home: AdventureScreen(practiceTools: practiceTools),
       ),
     ),
   );
@@ -67,6 +76,85 @@ Future<void> openAdventure(
 }
 
 void main() {
+  test('field play never sends an encounter when GPS is unavailable', () async {
+    final repo = EntryFixture()..reviewed = true;
+    final container = ProviderContainer(
+      overrides: [
+        adventureRepositoryProvider.overrideWithValue(repo),
+        adventureLocationProvider.overrideWithValue(() async {
+          throw const ApiFailure('GPS', 'Location permission denied');
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    final field = adventureProvider(('alice', 'field'));
+    final subscription = container.listen(field, (_, _) {});
+    addTearDown(subscription.close);
+    await Future<void>.delayed(Duration.zero);
+    await container.read(field.notifier).start('palace', 'owned-1', true);
+    expect(repo.calls, isEmpty);
+    expect(container.read(field).failure?.code, 'GPS');
+    expect(container.read(field).pending, isFalse);
+  });
+
+  testWidgets(
+    'normal play never promotes practice or enables fixture encounters',
+    (tester) async {
+      final repo = EntryFixture();
+      await openAdventure(tester, repo, practiceTools: false);
+      expect(find.text('Your adventure'), findsOneWidget);
+      expect(find.textContaining('Start a journey'), findsOneWidget);
+      expect(find.byKey(const Key('adventure-play-practice')), findsNothing);
+      expect(find.text('Server practice'), findsNothing);
+      expect(find.text('Royal Palace'), findsNothing);
+      final map = find.widgetWithText(OutlinedButton, 'Choose on map');
+      expect(tester.widget<OutlinedButton>(map).onPressed, isNull);
+      final start = find.byKey(const Key('adventure-start-encounter'));
+      await tester.ensureVisible(start);
+      expect(tester.widget<FilledButton>(start).onPressed, isNull);
+      expect(repo.calls, isEmpty);
+    },
+  );
+
+  testWidgets('real play uses field endpoint and measured GPS', (tester) async {
+    final repo = EntryFixture()..reviewed = true;
+    final measured = <String, dynamic>{
+      'latitude': 11.5638,
+      'longitude': 104.9315,
+      'accuracy': 10,
+      'mocked': false,
+      'measuredAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    var gpsRequests = 0;
+    await openAdventure(
+      tester,
+      repo,
+      practiceTools: false,
+      location: () async {
+        gpsRequests++;
+        return measured;
+      },
+    );
+    await tester.tap(find.byKey(const Key('adventure-choose-destination')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Royal Palace'));
+    await tester.tap(find.text('Royal Palace'));
+    await tester.pumpAndSettle();
+    final consent = find.byKey(const Key('adventure-safety-consent'));
+    await tester.ensureVisible(consent);
+    await tester.tap(
+      find.descendant(of: consent, matching: find.byType(Checkbox)),
+    );
+    await tester.pumpAndSettle();
+    final start = find.byKey(const Key('adventure-start-encounter'));
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+    expect(gpsRequests, 1);
+    expect(repo.calls.single.$1, 'field/encounters');
+    expect(repo.calls.single.$2['location'], measured);
+  });
+
   test(
     'a failed field load retains configured practice availability',
     () async {
@@ -189,7 +277,10 @@ void main() {
       final repo = EntryFixture()..practiceEnabled = false;
       final router = GoRouter(
         routes: [
-          GoRoute(path: '/', builder: (_, _) => const AdventureScreen()),
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const AdventureScreen(practiceTools: true),
+          ),
           GoRoute(
             path: '/rpg',
             builder: (_, _) =>

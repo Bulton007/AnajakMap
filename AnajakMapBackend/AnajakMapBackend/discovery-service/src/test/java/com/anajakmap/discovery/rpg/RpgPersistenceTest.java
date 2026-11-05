@@ -19,10 +19,61 @@ class RpgPersistenceTest {
     return "true".equals(System.getenv("RPG_ORACLE_TEST")) || "true".equals(System.getenv("RPG_POSTGRES_TEST"));
   }
   JdbcTemplate db; RpgService service; ObjectMapper mapper; Changes changes;
-  DriverManagerDataSource source;
+  javax.sql.DataSource source;
+  static boolean oracleMigrated;
+  @AfterEach void closePool() { if(source instanceof com.zaxxer.hikari.HikariDataSource pool)pool.close(); }
   final String actor="rpg-test-"+UUID.randomUUID();
   final String destination="4b9f991fa8c7bb8f";
   String key(){return UUID.randomUUID().toString();}
+  RpgService at(java.time.Instant instant) {
+    return new RpgService(db,changes,mapper,new DataSourceTransactionManager(source),new MockEnvironment(),false,
+      java.time.Clock.fixed(instant,java.time.ZoneOffset.UTC),new Random(7));
+  }
+  @Test void gpsJourneyCreatesPrivateVisitedStopsAndRealAccountEncounters() {
+    var now=java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+    var first=at(now);
+    var journey=map(map(first.startJourney(actor,key())).get("journey"));
+    String id=journey.get("ID").toString();
+    assertEquals(id,map(map(first.startJourney(actor,key())).get("journey")).get("ID"));
+    var p=new RpgRules.Location(11.55,104.92,10,now,false);
+    assertNull(map(first.journeyPoint(actor,key(),id,p)).get("destinationId"));
+    var later=at(now.plusSeconds(15));
+    var location=new RpgRules.Location(11.55,104.92,10,now.plusSeconds(15),false);
+    String pointKey=key();
+    var result=map(later.journeyPoint(actor,pointKey,id,location));
+    String visited=result.get("destinationId").toString();
+    assertEquals(visited,map(later.journeyPoint(actor,pointKey,id,location)).get("destinationId"));
+    assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM rpg_journey_points WHERE journey_id=?",Integer.class,id));
+    assertTrue(later.world(actor,"field").stream().anyMatch(d->visited.equals(d.get("ID"))));
+    assertFalse(later.world(actor+"-other","field").stream().anyMatch(d->visited.equals(d.get("ID"))));
+    assertThrows(ResponseStatusException.class,()->later.stopJourney(actor+"-other",key(),id));
+    var profile=map(later.profile(actor,"field"));
+    String companion=map(((List<?>)profile.get("monsters")).getFirst()).get("ID").toString();
+    var battle=map(later.start(actor,"field",key(),new RpgService.Start(visited,companion,true,location)));
+    assertEquals("active",battle.get("status"));
+    var intruder=map(later.profile(actor+"-other","field"));
+    String other=map(((List<?>)intruder.get("monsters")).getFirst()).get("ID").toString();
+    assertThrows(ResponseStatusException.class,()->later.start(actor+"-other","field",key(),new RpgService.Start(visited,other,true,location)));
+    later.stopJourney(actor,key(),id);
+    assertThrows(ResponseStatusException.class,()->later.journeyPoint(actor,key(),id,location));
+    assertEquals(2,((List<?>)map(later.journey(actor)).get("points")).size());
+  }
+  @Test void journeyRejectsInvalidGpsAndDoesNotCountPausedGapsAsTravel() {
+    var now=java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+    var first=at(now);
+    String id=map(map(first.startJourney(actor,key())).get("journey")).get("ID").toString();
+    assertThrows(ResponseStatusException.class,()->first.journeyPoint(actor,key(),id,new RpgRules.Location(11,104,10,now,true)));
+    assertThrows(ResponseStatusException.class,()->first.journeyPoint(actor,key(),id,new RpgRules.Location(11,104,60,now,false)));
+    assertThrows(ResponseStatusException.class,()->first.journeyPoint(actor,key(),id,new RpgRules.Location(11,104,10,now.minusSeconds(61),false)));
+    first.journeyPoint(actor,key(),id,new RpgRules.Location(11,104,10,now,false));
+    var resumed=at(now.plusSeconds(120));
+    var result=map(resumed.journeyPoint(actor,key(),id,new RpgRules.Location(11.01,104,10,now.plusSeconds(120),false)));
+    assertNull(result.get("destinationId"));
+    assertEquals(0,((Number)result.get("distanceM")).doubleValue());
+    var jumped=at(now.plusSeconds(135));
+    assertThrows(ResponseStatusException.class,()->jumped.journeyPoint(actor,key(),id,new RpgRules.Location(12,105,10,now.plusSeconds(135),false)));
+    assertEquals(2,((List<?>)map(resumed.journey(actor)).get("points")).size());
+  }
   Map<?,?> map(Object value){return (Map<?,?>)value;}
   @BeforeEach void setup() {
     boolean postgres="true".equals(System.getenv("RPG_POSTGRES_TEST"));
@@ -35,9 +86,16 @@ class RpgPersistenceTest {
       db=new com.anajakmap.platform.PostgresJdbcConfiguration().jdbcTemplate(source);
     } else {
       source=new DriverManagerDataSource(System.getenv("ORACLE_TEST_URL"),System.getenv("ORACLE_TEST_USER"),System.getenv("ORACLE_TEST_PASSWORD"));
-      Flyway.configure().dataSource(source).locations("classpath:db/migration").load().migrate();
+      if(!oracleMigrated) {
+        Flyway.configure().dataSource(source).locations("classpath:db/migration").load().migrate();
+        oracleMigrated=true;
+      }
       db=new JdbcTemplate(source);
     }
+    var pool=new com.zaxxer.hikari.HikariDataSource();pool.setDataSource(source);
+    pool.setMaximumPoolSize(4);pool.setMinimumIdle(0);pool.setConnectionTimeout(20000);
+    source=pool;
+    db=postgres?new com.anajakmap.platform.PostgresJdbcConfiguration().jdbcTemplate(source):new JdbcTemplate(source);
     mapper=new ObjectMapper().findAndRegisterModules();changes=new Changes(db,mapper);
     service=create();
   }

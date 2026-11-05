@@ -72,7 +72,10 @@ void main() {
               child: child!,
             ),
             theme: Tokens.theme(Brightness.light),
-            home: const AdventureScreen(destinationId: '4b9f991fa8c7bb8f'),
+            home: const AdventureScreen(
+              destinationId: '4b9f991fa8c7bb8f',
+              practiceTools: true,
+            ),
           ),
         ),
       );

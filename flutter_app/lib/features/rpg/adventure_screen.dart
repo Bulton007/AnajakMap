@@ -5,6 +5,7 @@ import 'dart:async';
 import 'encounter_policy.dart';
 import '../../shared/components/visual.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/network/api_client.dart';
@@ -19,10 +20,16 @@ import 'encounter_countdown.dart';
 import '../../shared/formatting/travel_dates.dart';
 import 'rpg_game.dart';
 import 'rpg_screen.dart';
+import 'journey_screen.dart';
 
 class AdventureScreen extends ConsumerStatefulWidget {
-  const AdventureScreen({super.key, this.destinationId});
+  const AdventureScreen({
+    super.key,
+    this.destinationId,
+    this.practiceTools = const bool.fromEnvironment('RPG_PRACTICE_TOOLS'),
+  });
   final String? destinationId;
+  final bool practiceTools;
   @override
   ConsumerState<AdventureScreen> createState() => _AdventureScreenState();
 }
@@ -35,6 +42,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
   bool discover = false, awaitingFight = false;
   Timer? discoveryTimer;
   final _battleAnchor = GlobalKey();
+  final _destinationAnchor = GlobalKey();
   String? _presentedBattle;
   final encounters = EncounterPolicy(
     probability:
@@ -112,6 +120,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
+    final practiceTools = !kReleaseMode && widget.practiceTools;
     final connected = ref.watch(environmentProvider).connected;
     if (!connected || !auth.authenticated) {
       _presentedBattle = null;
@@ -168,8 +177,18 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
     }
     final playerLevel = (1 + integer(snapshot?.profile ?? {}, 'xp') ~/ 100)
         .clamp(1, 50);
+    final destinations = realm == 'field' && !practiceTools
+        ? state.world
+              .where(
+                (d) =>
+                    integer(d, 'visited') == 1 ||
+                    (integer(d, 'approved') == 1 &&
+                        integer(d, 'accessible') == 1),
+              )
+              .toList()
+        : state.world;
     final selected =
-        state.world.where((d) => string(d, 'id') == destination).firstOrNull ??
+        destinations.where((d) => string(d, 'id') == destination).firstOrNull ??
         (realm == 'practice'
             ? state.world
                   .where((d) => integer(d, 'minLevel') <= playerLevel)
@@ -204,6 +223,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
         playerLevel >= integer(selected, 'minLevel') &&
         (!boss || guardianAvailable) &&
         (realm == 'practice' ||
+            integer(selected, 'visited') == 1 ||
             (integer(selected, 'approved') == 1 &&
                 integer(selected, 'accessible') == 1));
     return Scaffold(
@@ -234,7 +254,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                     caption: t('CREATURE TRAILS', 'ដំណើរសត្វវេទមន្ត'),
                   ),
                   const SizedBox(height: 16),
-                  if (realm == 'field')
+                  if (realm == 'field' && practiceTools)
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(20),
@@ -304,6 +324,125 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                         ),
                       ),
                     ),
+                  if (realm == 'field' && !practiceTools)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const CreatureAvatar(speciesId: 'mossling'),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    t(
+                                      'Your adventure',
+                                      'ដំណើរផ្សងព្រេងរបស់អ្នក',
+                                    ),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              t(
+                                'Track your journey, discover creatures at places you visit, and save your collection and progress to your account.',
+                                'តាមដានដំណើរ ស្វែងរកសត្វនៅទីតាំងដែលអ្នកបានទៅដល់ ហើយរក្សាទុកបណ្ដុំសត្វ និងវឌ្ឍនភាពក្នុងគណនី។',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (!state.busy &&
+                                state.failure == null &&
+                                !reviewedFieldAvailable &&
+                                destinations.isEmpty)
+                              _notice(
+                                t(
+                                  'Start a journey and stop safely to discover your first encounter location.',
+                                  'ចាប់ផ្ដើមដំណើរ ហើយឈប់នៅកន្លែងសុវត្ថិភាព ដើម្បីរកទីតាំងជួបសត្វដំបូង។',
+                                ),
+                              ),
+                            if (state.capabilities['journeyTrackingEnabled'] ==
+                                true)
+                              FilledButton.icon(
+                                key: const Key('adventure-track-journey'),
+                                icon: const Icon(Icons.route),
+                                label: Text(t('Track journey', 'តាមដានដំណើរ')),
+                                onPressed:
+                                    state.busy || state.pending || state.active
+                                    ? null
+                                    : () async {
+                                        final id = await Navigator.of(context)
+                                            .push<String>(
+                                              MaterialPageRoute(
+                                                builder: (_) => JourneyScreen(
+                                                  account:
+                                                      auth.session!.user.id,
+                                                ),
+                                              ),
+                                            );
+                                        if (!mounted) return;
+                                        if (id != null) {
+                                          setState(() {
+                                            destination = id;
+                                            safe = false;
+                                            boss = false;
+                                          });
+                                        }
+                                        await controller.load();
+                                        if (!mounted || id == null) return;
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              final anchor = _destinationAnchor
+                                                  .currentContext;
+                                              if (mounted && anchor != null) {
+                                                Scrollable.ensureVisible(
+                                                  anchor,
+                                                );
+                                              }
+                                            });
+                                      },
+                              ),
+                            if (state.capabilities['journeyTrackingEnabled'] ==
+                                    true &&
+                                destinations.isNotEmpty)
+                              const SizedBox(height: 12),
+                            if (reviewedFieldAvailable ||
+                                destinations.isNotEmpty)
+                              FilledButton.icon(
+                                key: const Key('adventure-choose-destination'),
+                                onPressed: state.busy
+                                    ? null
+                                    : () {
+                                        final anchor =
+                                            _destinationAnchor.currentContext;
+                                        if (anchor != null) {
+                                          Scrollable.ensureVisible(
+                                            anchor,
+                                            duration:
+                                                MediaQuery.disableAnimationsOf(
+                                                  context,
+                                                )
+                                                ? Duration.zero
+                                                : const Duration(
+                                                    milliseconds: 300,
+                                                  ),
+                                          );
+                                        }
+                                      },
+                                icon: const Icon(Icons.explore_outlined),
+                                label: Text(
+                                  t('Choose destination', 'ជ្រើសរើសគោលដៅ'),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ExpansionTile(
                     leading: const Icon(Icons.info_outline),
                     title: Text(t('About this adventure', 'អំពីដំណើរនេះ')),
@@ -320,31 +459,34 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: Text(
-                          t('Field adventure', 'ផ្សងព្រេងនៅទីតាំងពិត'),
+                  if (practiceTools)
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: Text(
+                            t('Field adventure', 'ផ្សងព្រេងនៅទីតាំងពិត'),
+                          ),
+                          selected: realm == 'field',
+                          onSelected: state.busy || state.pending
+                              ? null
+                              : (_) => _chooseRealm('field'),
                         ),
-                        selected: realm == 'field',
-                        onSelected: state.busy || state.pending
-                            ? null
-                            : (_) => _chooseRealm('field'),
-                      ),
-                      ChoiceChip(
-                        label: Text(t('Server practice', 'សាកល្បងលើម៉ាស៊ីនមេ')),
-                        selected: realm == 'practice',
-                        onSelected:
-                            state.busy ||
-                                state.pending ||
-                                state.capabilities['practiceEnabled'] != true
-                            ? null
-                            : (_) => _chooseRealm('practice'),
-                      ),
-                    ],
-                  ),
+                        ChoiceChip(
+                          label: Text(
+                            t('Server practice', 'សាកល្បងលើម៉ាស៊ីនមេ'),
+                          ),
+                          selected: realm == 'practice',
+                          onSelected:
+                              state.busy ||
+                                  state.pending ||
+                                  state.capabilities['practiceEnabled'] != true
+                              ? null
+                              : (_) => _chooseRealm('practice'),
+                        ),
+                      ],
+                    ),
                   if (realm == 'practice')
                     _notice(
                       t(
@@ -460,7 +602,12 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                             'ការជួបនេះផុតកំណត់ហើយ។ ផ្ទុកឡើងវិញដើម្បីបន្ត។',
                           ),
                         ),
-                    _heading(t('Choose your destination', 'ជ្រើសរើសគោលដៅ')),
+                    KeyedSubtree(
+                      key: _destinationAnchor,
+                      child: _heading(
+                        t('Choose your destination', 'ជ្រើសរើសគោលដៅ'),
+                      ),
+                    ),
                     Text(
                       t(
                         'Map pins are destination information, not live monster locations.',
@@ -471,7 +618,11 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                     OutlinedButton.icon(
                       icon: const Icon(Icons.map_outlined),
                       label: Text(t('Choose on map', 'ជ្រើសរើសលើផែនទី')),
-                      onPressed: state.busy || state.pending || state.active
+                      onPressed:
+                          state.busy ||
+                              state.pending ||
+                              state.active ||
+                              destinations.isEmpty
                           ? null
                           : () async {
                               final id = await Navigator.of(context)
@@ -486,7 +637,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                                         body: SafeArea(
                                           child: TravelOpenMap(
                                             places: [
-                                              for (final d in state.world)
+                                              for (final d in destinations)
                                                 MapPlace(
                                                   string(d, 'id'),
                                                   string(d, 'name'),
@@ -512,7 +663,7 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                               }
                             },
                     ),
-                    for (final d in state.world)
+                    for (final d in destinations)
                       Card(
                         margin: const EdgeInsets.only(top: 12),
                         child: ListTile(
@@ -523,9 +674,17 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                                 ? Icons.beach_access_outlined
                                 : Icons.temple_buddhist_outlined,
                           ),
-                          title: Text(string(d, 'name')),
+                          title: Text(
+                            integer(d, 'visited') == 1
+                                ? t('Visited stop', 'ទីតាំងបានទៅដល់')
+                                : string(d, 'name'),
+                          ),
                           subtitle: Text(
-                            '${string(d, 'habitat')} • ${t('Level', 'កម្រិត')} ${integer(d, 'minLevel')} • ${integer(d, 'radiusM')} m\n${integer(d, 'approved') == 1 && integer(d, 'accessible') == 1 ? t('Reviewed location', 'ទីតាំងបានពិនិត្យ') : t('Test fixture • field play unavailable', 'ទីតាំងសាកល្បង • មិនអាចលេងនៅទីតាំងពិតបានទេ')}',
+                            '${integer(d, 'visited') == 1 ? t('Journey stop', 'ទីតាំងឈប់ក្នុងដំណើរ') : string(d, 'habitat')} • ${t('Level', 'កម្រិត')} ${integer(d, 'minLevel')} • ${integer(d, 'radiusM')} m\n${integer(d, 'visited') == 1
+                                ? t('Visited with GPS', 'បានទៅដល់តាម GPS')
+                                : integer(d, 'approved') == 1 && integer(d, 'accessible') == 1
+                                ? t('Reviewed location', 'ទីតាំងបានពិនិត្យ')
+                                : t('Test fixture • field play unavailable', 'ទីតាំងសាកល្បង • មិនអាចលេងនៅទីតាំងពិតបានទេ')}',
                           ),
                           trailing: string(d, 'id') == selectedId
                               ? const Icon(Icons.check_circle)
@@ -539,11 +698,11 @@ class _AdventureScreenState extends ConsumerState<AdventureScreen> {
                                 }),
                         ),
                       ),
-                    if (state.world.isEmpty)
+                    if (destinations.isEmpty)
                       Text(
                         t(
-                          'No destinations are configured.',
-                          'មិនទាន់មានគោលដៅដែលបានកំណត់ទេ។',
+                          'No visited or approved locations yet.',
+                          'មិនទាន់មានទីតាំងបានទៅដល់ ឬបានអនុញ្ញាតទេ។',
                         ),
                       ),
                     if (selected != null) ...[

@@ -18,6 +18,10 @@ import 'connected_generation.dart';
 import 'recommendations.dart';
 import 'voice_assistance.dart';
 import 'ai_service_status.dart';
+import 'connected_trips.dart';
+import 'trip_invitations.dart';
+import 'trip_chat.dart';
+import 'device_notification_settings.dart';
 
 class ConnectedTools extends ConsumerStatefulWidget {
   const ConnectedTools({
@@ -25,16 +29,31 @@ class ConnectedTools extends ConsumerStatefulWidget {
     required this.tool,
     required this.profile,
     this.trip,
+    this.initialNotification,
   });
   final String tool;
   final Json profile;
   final ServerTrip? trip;
+  final Json? initialNotification;
   @override
   ConsumerState<ConnectedTools> createState() => _ToolsState();
 }
 
 class _ToolsState extends ConsumerState<ConnectedTools> {
   int version = 0, page = 0;
+  @override
+  void initState() {
+    super.initState();
+    if (widget.tool == 'notifications') {
+      ref.listenManual(notificationUpdateProvider, (_, _) => refresh());
+      if (widget.initialNotification case final notification?) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) openNotification(notification);
+        });
+      }
+    }
+  }
+
   TravelRepository get repo => ref.read(repositoryProvider);
   String get tripId => widget.trip!.id;
   String get scope =>
@@ -43,6 +62,106 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
     if (mounted) {
       setState(() => version++);
     }
+  }
+
+  Future<void> notificationAction(Future<Object?> Function() action) async {
+    final done = await runRequest(context, () async {
+      await action();
+      return true;
+    });
+    if (mounted && done == true) ref.invalidate(notificationUpdateProvider);
+  }
+
+  Future<void> openNotification(Json row) async {
+    final id = string(row, 'id');
+    await notificationAction(() => repo.readNotification(id));
+    if (!mounted) return;
+    final trip = string(row, 'tripId');
+    final account = string(widget.profile, 'id');
+    if (string(row, 'kind') == 'chat.direct-message') {
+      openScreen(
+        context,
+        TripChat.direct(peerId: string(row, 'actorId'), accountId: account),
+      );
+      return;
+    }
+    if (trip.isEmpty) return;
+    switch (string(row, 'kind')) {
+      case 'group.invited':
+        openScreen(context, TripInvitations(tripId: trip));
+      case 'group.joined':
+      case 'group.invitation-rejected':
+      case 'itinerary.approved':
+        openScreen(
+          context,
+          ConnectedTripDetail(tripId: trip, profile: widget.profile),
+        );
+      case 'chat.trip-message':
+        openScreen(context, TripChat(tripId: trip, accountId: account));
+    }
+  }
+
+  Widget notificationCard(Json row) {
+    final id = string(row, 'id');
+    final sender = string(row, 'actorId');
+    final due = DateTime.tryParse(string(row, 'dueAt'));
+    final pending =
+        string(row, 'kind') == 'REMINDER' && string(row, 'status') == 'PENDING';
+    final unread =
+        field(row, 'readAt') == null &&
+        due != null &&
+        !due.isAfter(DateTime.now()) &&
+        string(row, 'status') != 'CANCELLED';
+    return TravelNotificationCard(
+      delivery: row,
+      unread: unread,
+      sender: sender.isEmpty ? null : TravelerName(accountId: sender),
+      onOpen:
+          string(row, 'tripId').isNotEmpty ||
+              string(row, 'kind') == 'chat.direct-message'
+          ? () => openNotification(row)
+          : null,
+      actions: [
+        if (unread)
+          TextButton.icon(
+            onPressed: () =>
+                notificationAction(() => repo.readNotification(id)),
+            icon: const Icon(Icons.done_all_rounded, size: 16),
+            label: Text(context.isKhmer ? 'សម្គាល់ថាបានអាន' : 'Mark as read'),
+          ),
+        if (pending) ...[
+          TextButton(
+            onPressed: () => form(
+              'edit',
+              [
+                InputSpec('title', initial: string(row, 'title')),
+                InputSpec(
+                  'dueAt',
+                  kind: InputKind.instant,
+                  initial: string(row, 'dueAt'),
+                ),
+              ],
+              (body, _) =>
+                  repo.updateReminder(id, body['title'], body['dueAt']),
+            ),
+            child: Text(context.t('edit')),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (await confirmDialog(
+                    context,
+                    context.t('cancel'),
+                    string(row, 'title'),
+                  ) &&
+                  mounted) {
+                await notificationAction(() => repo.cancelReminder(id));
+              }
+            },
+            child: Text(context.t('cancel')),
+          ),
+        ],
+      ],
+    );
   }
 
   Future<Object?> load() => switch (widget.tool) {
@@ -61,10 +180,19 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
     'summary': await repo.summary(tripId),
     'expenses': await repo.expenses(tripId, page: page),
   };
-  Future<Json> _group() async => {
-    'members': await repo.members(tripId),
-    'locations': await repo.locations(tripId),
-  };
+  Future<Json> _group() async {
+    final members = await repo.members(tripId);
+    final own = members.any(
+      (member) =>
+          string(member, 'role') == 'OWNER' &&
+          string(member, 'accountId') == string(widget.profile, 'id'),
+    );
+    return {
+      'members': members,
+      'locations': await repo.locations(tripId),
+      if (own) 'invitations': await repo.sentInvitations(tripId),
+    };
+  }
 
   String _memberName(Json member, int index) {
     if (string(member, 'accountId') == widget.profile['id']) {
@@ -463,7 +591,29 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
                         choices: ['VIEWER', 'EDITOR'],
                       ),
                     ],
-                    (b, _) => repo.invite(tripId, b['accountId'], b['role']),
+                    (b, _) async {
+                      final account = await repo.traveler(
+                        b['accountId'].toString().trim(),
+                      );
+                      if (!context.mounted) return null;
+                      final name = string(
+                        account,
+                        'displayName',
+                        string(account, 'id'),
+                      );
+                      if (!await confirmDialog(
+                        context,
+                        context.t('inviteMember'),
+                        name,
+                      )) {
+                        return null;
+                      }
+                      return repo.invite(
+                        tripId,
+                        string(account, 'id'),
+                        b['role'],
+                      );
+                    },
                     notice: context.isKhmer
                         ? 'ការអញ្ជើញតាម API បច្ចុប្បន្នត្រូវការលេខគណនី Anajak របស់អ្នកធ្វើដំណើរ។'
                         : 'The current invitation API requires the traveler’s Anajak account code.',
@@ -593,7 +743,44 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
             ),
             const SizedBox(height: 12),
           ],
-          if (widget.tool == 'notifications') Notice(context.t('pushSetup')),
+          if (widget.tool == 'notifications')
+            ExpansionTile(
+              key: const PageStorageKey('device-notification-controls'),
+              tilePadding: EdgeInsets.zero,
+              leading: const Icon(
+                Icons.notifications_active_outlined,
+                size: 20,
+              ),
+              title: Text(
+                context.isKhmer
+                    ? 'ការកំណត់ការជូនដំណឹង'
+                    : 'Phone notification settings',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              children: [DeviceNotificationSettings(scope: scope)],
+            ),
+          if (widget.tool == 'notifications')
+            ExpansionTile(
+              key: const PageStorageKey('notification-delivery-information'),
+              tilePadding: EdgeInsets.zero,
+              leading: const Icon(Icons.info_outline, size: 20),
+              title: Text(
+                context.isKhmer
+                    ? 'អំពីការជូនដំណឹង'
+                    : 'About notification delivery',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    context.isKhmer
+                        ? 'សារថ្មីត្រូវការកម្មវិធីភ្ជាប់អ៊ីនធឺណិត។ ការរំលឹកដែលបានកំណត់លើទូរសព្ទអាចបង្ហាញនៅពេលបិទកម្មវិធី។ ប្រព័ន្ធជំរុញត្រូវការការកំណត់សេវា។'
+                        : 'Messages need the app to be connected. Reminders scheduled on this phone can appear when it is closed. Remote push needs a configured delivery service.',
+                  ),
+                ),
+              ],
+            ),
           if (widget.tool == 'journal') ...[
             for (final entry in objects(data))
               Card(
@@ -656,6 +843,33 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
           ] else if (widget.tool == 'calendar') ...[
             CalendarPanel(data: object(data), zone: widget.trip!.timezone),
           ] else if (widget.tool == 'group') ...[
+            if (objects(object(data)['invitations']).isNotEmpty) ...[
+              Section(
+                context.isKhmer ? 'ការអញ្ជើញដែលបានផ្ញើ' : 'Sent invitations',
+              ),
+              for (final invite in objects(object(data)['invitations']))
+                Card(
+                  child: ListTile(
+                    title: TravelerName(accountId: string(invite, 'accountId')),
+                    subtitle: Text(string(invite, 'status')),
+                    trailing: string(invite, 'status') == 'PENDING'
+                        ? TextButton(
+                            onPressed: () async {
+                              final cancelled = await runRequest(
+                                context,
+                                () => repo.cancelInvite(
+                                  tripId,
+                                  string(invite, 'accountId'),
+                                ),
+                              );
+                              if (cancelled != null) refresh();
+                            },
+                            child: Text(context.t('cancel')),
+                          )
+                        : null,
+                  ),
+                ),
+            ],
             Section(context.isKhmer ? 'សមាជិកដំណើរ' : 'Trip members'),
             for (final (index, member) in objects(
               object(data)['members'],
@@ -739,11 +953,32 @@ class _ToolsState extends ConsumerState<ConnectedTools> {
             for (final contact in objects(data))
               EmergencyContactCard(contact: contact),
           ] else if (widget.tool == 'notifications') ...[
+            Wrap(
+              spacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => openScreen(context, const TripInvitations()),
+                  child: Text(
+                    context.isKhmer
+                        ? 'ការអញ្ជើញចូលរួមដំណើរ'
+                        : 'Trip invitations',
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => notificationAction(repo.readNotifications),
+                  child: Text(
+                    context.isKhmer
+                        ? 'សម្គាល់ទាំងអស់ថាបានអាន'
+                        : 'Mark all as read',
+                  ),
+                ),
+              ],
+            ),
             if (objects(data).isEmpty) Text(context.t('empty')),
             for (final delivery in {
               for (final item in objects(data)) string(item, 'id'): item,
             }.values)
-              TravelNotificationCard(delivery: delivery),
+              notificationCard(delivery),
           ] else ...[
             const SizedBox(height: 16),
             ServerResult(data),
@@ -817,12 +1052,14 @@ class CompanionTasks extends ConsumerWidget {
       const SizedBox(height: 16),
       const AiServiceStatus(),
       const SizedBox(height: 20),
-      VisualActions(
+      Column(
+        spacing: 8,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           VisualAction(
+            horizontal: true,
             icon: Icons.travel_explore,
             label: context.t('recommendTitle'),
-            subtitle: context.t('recommendCardBody'),
             onTap: () =>
                 openScreen(context, TripRecommendations(profile: profile)),
           ),
@@ -834,6 +1071,7 @@ class CompanionTasks extends ConsumerWidget {
             'chat',
           ])
             VisualAction(
+              horizontal: true,
               icon: featureIcon(task),
               label: context.t(task),
               subtitle:

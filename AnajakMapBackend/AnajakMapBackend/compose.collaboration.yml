@@ -1,0 +1,17 @@
+services:
+  discovery-service:
+    image: anajakmap/discovery-service:journey-v1
+  identity-service:
+    image: anajakmap/identity-service:collaboration-v2
+  trip-service:
+    image: anajakmap/trip-service:collaboration-v4
+  notification-service:
+    image: anajakmap/notification-service:collaboration-v2
+  gateway-service:
+    image: anajakmap/gateway-service:collaboration-v4
+  nginx:
+    volumes:
+      - type: bind
+        source: ${ANAJAK_COLLABORATION_ROOT:?Use start-collaboration.ps1}/deploy/laptop/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true

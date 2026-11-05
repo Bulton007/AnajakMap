@@ -14,6 +14,10 @@ public class RpgApi {
   public RpgApi(RpgService service,RateLimit limit){this.service=service;this.limit=limit;}
   private String actor(Jwt jwt){String id=jwt.getSubject();limit.check("rpg:"+id,60,60);return id;}
   @GetMapping("/capabilities") public Object capabilities(){return service.capabilities();}
+  @GetMapping("/journey") public Object journey(@AuthenticationPrincipal Jwt jwt){return service.journey(actor(jwt));}
+  @PostMapping("/journey/start") public Object startJourney(@AuthenticationPrincipal Jwt jwt,@RequestHeader("Idempotency-Key") String key){return service.startJourney(actor(jwt),key);}
+  @PostMapping("/journey/{id}/points") public Object journeyPoint(@AuthenticationPrincipal Jwt jwt,@PathVariable String id,@RequestHeader("Idempotency-Key") String key,@Valid @RequestBody RpgRules.Location point){return service.journeyPoint(actor(jwt),key,id,point);}
+  @PostMapping("/journey/{id}/stop") public Object stopJourney(@AuthenticationPrincipal Jwt jwt,@PathVariable String id,@RequestHeader("Idempotency-Key") String key){return service.stopJourney(actor(jwt),key,id);}
   @GetMapping("/{realm}/world") public Object world(@AuthenticationPrincipal Jwt jwt,@PathVariable String realm){return service.world(actor(jwt),realm);}
   @GetMapping("/{realm}/profile") public Object profile(@AuthenticationPrincipal Jwt jwt,@PathVariable String realm){return service.profile(actor(jwt),realm);}
   @PostMapping("/{realm}/encounters") public Object start(@AuthenticationPrincipal Jwt jwt,@PathVariable String realm,@RequestHeader("Idempotency-Key") String key,@Valid @RequestBody RpgService.Start input){return service.start(actor(jwt),realm,key,input);}

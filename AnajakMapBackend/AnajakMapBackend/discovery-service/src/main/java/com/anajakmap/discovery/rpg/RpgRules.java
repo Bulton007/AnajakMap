@@ -32,11 +32,13 @@ public final class RpgRules {
     return 6371000*2*Math.asin(Math.sqrt(Math.min(1,x)));
   }
   public static boolean eligible(Location l, Instant now,double lat,double lon,int radius) {
+    return validLocation(l,now) && distance(lat,lon,l.latitude,l.longitude)+l.accuracy<=radius;
+  }
+  public static boolean validLocation(Location l, Instant now) {
     return l!=null && l.measuredAt!=null && !l.mocked && Double.isFinite(l.latitude)
       && Double.isFinite(l.longitude) && Math.abs(l.latitude)<=90 && Math.abs(l.longitude)<=180
       && Double.isFinite(l.accuracy) && l.accuracy>0 && l.accuracy<=50
-      && !l.measuredAt.isBefore(now.minusSeconds(60)) && !l.measuredAt.isAfter(now.plusSeconds(5))
-      && distance(lat,lon,l.latitude,l.longitude)+l.accuracy<=radius;
+      && !l.measuredAt.isBefore(now.minusSeconds(60)) && !l.measuredAt.isAfter(now.plusSeconds(5));
   }
   public record Fighter(String speciesId,int level,int variation,int hp,int energy,int poison,int shield,int evolution) {
     public Fighter(String speciesId,int level,int variation,int hp,int energy,int poison,int shield){this(speciesId,level,variation,hp,energy,poison,shield,0);}

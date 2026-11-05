@@ -27,6 +27,7 @@ public class RpgService {
   private final Clock clock;
   private final Random random;
   private final RpgProgression progression;
+  private final RpgJourney journeys;
   private final int encounterTtl;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -42,6 +43,7 @@ public class RpgService {
     encounterTtl=env.getProperty("RPG_ENCOUNTER_TTL_SECONDS",Integer.class,900);
     if(encounterTtl<60||encounterTtl>3600)throw new IllegalArgumentException("Encounter expiry must be 60–3600 seconds");
     this.progression=new RpgProgression(db,clock);
+    this.journeys=new RpgJourney(db,clock);
     practice=simulation && Arrays.stream(env.getActiveProfiles()).anyMatch(p->p.equals("dev")||p.equals("test"));
   }
   public record Start(@NotBlank @Size(max=80) String destinationId,
@@ -63,10 +65,26 @@ public class RpgService {
     if(actor.length()>100) throw new IllegalArgumentException();
     return actor+":"+realm;
   }
-  public Object capabilities() { return Map.of("practiceEnabled",practice,"fieldRequiresReviewedDestination",true,"redemptionEnabled",false,"partySize",3); }
+  public Object capabilities() { return Map.of("practiceEnabled",practice,"fieldRequiresReviewedDestination",false,"journeyTrackingEnabled",true,"redemptionEnabled",false,"partySize",3); }
+  public Object journey(String actor) {
+    String scope=scope(actor,"field");
+    return tx.execute(status->{lock(actor,"field",scope);return journeys.current(scope);});
+  }
+  public Object startJourney(String actor,String key) {
+    return mutate(actor,"field",key,"journey_start",Map.of(),()->journeys.start(scope(actor,"field")));
+  }
+  public Object stopJourney(String actor,String key,String id) {
+    return mutate(actor,"field",key,"journey_stop",Map.of("id",id),()->journeys.stop(scope(actor,"field"),id));
+  }
+  public Object journeyPoint(String actor,String key,String id,RpgRules.Location point) {
+    if(!RpgRules.validLocation(point,clock.instant()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Fresh accurate non-mocked GPS is required");
+    return mutate(actor,"field",key,"journey_point",Map.of("id",id,"point",point),()->journeys.point(scope(actor,"field"),id,point));
+  }
   public List<Map<String,Object>> world(String actor,String realm) {
-    scope(actor,realm);
-    var world=db.queryForList("SELECT * FROM rpg_destinations ORDER BY name");
+    String scope=scope(actor,realm);
+    var world=realm.equals("practice")
+      ?db.queryForList("SELECT * FROM rpg_destinations WHERE habitat<>'roaming' ORDER BY name")
+      :db.queryForList("SELECT d.*,CASE WHEN v.destination_id IS NOT NULL THEN 1 ELSE 0 END AS visited FROM rpg_destinations d LEFT JOIN rpg_journey_visits v ON v.destination_id=d.id AND v.scope_id=? WHERE (d.approved=1 AND d.accessible=1) OR v.destination_id IS NOT NULL ORDER BY d.name",scope);
     for(var d:world)d.put("spawnRules",db.queryForList("SELECT species_id,weight FROM rpg_spawn_rules WHERE destination_id=? ORDER BY species_id",d.get("ID")));
     return world;
   }
@@ -144,7 +162,7 @@ public class RpgService {
       var d=db.queryForMap("SELECT * FROM rpg_destinations WHERE id=?",body.destinationId);
       if(!body.safeConfirmed) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Confirm you are stationary in a safe permitted area");
       if(realm.equals("field")) {
-        if(number(d,"APPROVED")!=1||number(d,"ACCESSIBLE")!=1) throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Destination has not been reviewed for gameplay");
+        if(!journeys.owns(scope,body.destinationId)&&(number(d,"APPROVED")!=1||number(d,"ACCESSIBLE")!=1)) throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Visit this location with GPS before starting an encounter");
         if(!RpgRules.eligible(body.location,clock.instant(),((Number)d.get("LATITUDE")).doubleValue(),((Number)d.get("LONGITUDE")).doubleValue(),number(d,"RADIUS_M")))
           throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Fresh accurate location inside the permitted boundary is required");
       }
