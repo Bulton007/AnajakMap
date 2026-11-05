@@ -29,9 +29,14 @@ using this client; see `RPG_SETUP.md` and `../COLLABORATION_REPORT.md`.
 ## Build
 
 Local `config/production.local.json` contains only public client settings and
-points to the existing HTTPS backend. Local `android/key.properties` is prepared
-but awaits the existing upload keystore and signing settings. Both files and all
-keystores stay ignored by Git. A signed bundle is not yet produced.
+points to the existing HTTPS backend. Local `android/key.properties` uses the
+user-provided upload keystore and signing settings. Both files and all keystores
+stay ignored by Git. The signed bundle was built and verified on November 5, 2026.
+
+Saved artifacts are in `../.local/releases/3.0.0-13/`: `app.aab`,
+`app.aab.sha256`, `verification.txt`, and public `upload_certificate.pem`.
+The bundle is 71,053,442 bytes. SHA-256:
+`b841da040c90f839dbd8ee86c4c27a70af2d95b3642c640d930a3546946f0fe5`.
 
 ```powershell
 flutter build appbundle --release --dart-define-from-file=config/production.local.json --build-name=3.0.0 --build-number=13
@@ -49,7 +54,18 @@ key or create a replacement without the appropriate upload-key reset.
   The 8 RPG Oracle persistence tests separately passed in a disposable schema.
 - Fixed notification cleanup on widget disposal, and refreshed 11 visually
   reviewed screenshots for the shared layout changes before the final full run.
-- Signed-bundle verification awaits the upload keystore and its local settings.
+- Signed bundle verified as package `com.anajak.anajak_travel`, version 3.0.0 (13),
+  non-debuggable. All 170 payload entries passed signature verification and
+  matched the configured upload certificate. Standard `jarsigner` verification
+  also passed. The public API address was confirmed in ARM32, ARM64 and x86-64
+  compiled app binaries.
+- Upload certificate SHA-256:
+  `9E:68:14:98:B1:90:32:9F:92:29:AE:6D:CF:D8:BF:2F:07:DF:F4:4E:66:B9:7B:FF:F5:21:28:D8:97:B8:5F:14`.
+  This keystore entry was created November 5, 2026. Compatibility with the
+  existing Play listing's registered upload key was not verified. If replacing
+  its old upload key, complete Play Console's upload-key reset with the included
+  public certificate before uploading an update. The private keystore is not
+  included in the release folder.
 
 The emulator gameplay check captured River Makara through real server battle
 actions, confirmed 40 XP/15 gold, and displayed the owned instance in collection.

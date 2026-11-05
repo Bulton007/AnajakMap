@@ -5,7 +5,8 @@
 - Version is 3.0.0, build 13; package ID is unchanged. Public backend auth config returned 200 and the protected journey endpoint returned 401 to an anonymous request. The active tunnel points to the existing updated backend on port 18090.
 - Final full Flutter run: 273 passed, one optional live test skipped; analyzer clean. Relevant backend reactor: 60 passed, 14 environment-dependent tests skipped. Separate RPG Oracle integration verification is recorded below.
 - Full-suite verification found unsafe provider access during notification-shell disposal. The device service and notification scope are now cached during initialization. After visual review, 11 screenshot baselines were refreshed for the intentional shared UI changes; the final full suite passed without updating screenshots.
-- Release signing configuration is prepared locally but awaits the existing upload keystore and signing settings. Signing files, production-local JSON and generated bundles are ignored and not staged. No signed AAB or Play upload is claimed.
+- Signed 3.0.0 (13) AAB built using the user's local upload key and existing public backend; saved as `.local/releases/3.0.0-13/app.aab`. Package ID, non-debuggable status, version, all 170 signed payload entries, matching upload certificate and API address in all three compiled ABI binaries were verified. Standard jarsigner verification passed. SHA-256 is recorded in `flutter_app/VERSION_3_RELEASE_NOTES.md` and alongside the artifact.
+- The supplied keystore entry was created November 5, 2026. Its correspondence to the existing Play listing's registered upload key was not verified; a replacement key requires Play Console's upload-key reset. The public certificate is included for that process. Signing files, production-local JSON, generated bundles and Kotlin caches are ignored and not staged. No Play upload was performed.
 
 ## Compact UI and map follow-up
 
