@@ -13,6 +13,11 @@ Cambodia-focused AI travel companion with a Flutter Android/iOS application and 
 
 Development travel providers are explicitly labelled fixtures. Gmail delivery, real legal URLs, live provider credentials and other outstanding production configuration are documented in the setup guides. Credentials and generated build files are excluded from version control.
 
+## Product website
+
+The responsive AnajakMap landing page lives in [website](website/README.md).
+It builds to static HTML and CSS for Vercel without any app backend credentials.
+
 ## Windows laptop startup
 
 Install Docker Desktop with its Linux engine and Git, clone this repository,
