@@ -58,7 +58,7 @@ h3 { line-height: 1.25; font-size: 1.12rem; letter-spacing: -.025em; }
 .hero-visual figcaption small { color: #fff6de; }
 .section { padding-block: clamp(60px, 8vw, 112px); }
 .section-heading { margin-bottom: 28px; }
-.section-heading h2, .spotlight h2, .creature h2, .trust h2, .faq h2, .testing h2 { text-wrap: initial; }
+.section-heading h2, .spotlight h2, .creature h2, .faq h2, .testing h2 { text-wrap: initial; }
 .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .feature { padding: clamp(19px, 3vw, 36px); background: var(--paper); }
 .feature-top { display: flex; justify-content: space-between; align-items: start; margin-bottom: 25px; }
@@ -78,7 +78,7 @@ h3 { line-height: 1.25; font-size: 1.12rem; letter-spacing: -.025em; }
 .steps li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; padding: 17px 0; border-top: 1px solid #648072; }
 .steps li:last-child { border-bottom: 1px solid #648072; }
 .steps p { margin-top: 4px; }
-.spotlight, .creature, .trust, .faq { display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: clamp(25px, 7vw, 100px); }
+.spotlight, .creature, .faq { display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: clamp(25px, 7vw, 100px); }
 .spotlight img, .creature img { width: 100%; border-radius: 10px; }
 .spotlight figcaption, .creature figcaption { margin-top: 10px; }
 .spotlight .fine, .creature .fine { margin-top: 14px; }
@@ -94,8 +94,16 @@ h3 { line-height: 1.25; font-size: 1.12rem; letter-spacing: -.025em; }
 .gallery-credit { margin-top: 20px; }
 .creature { grid-template-columns: .85fr 1.15fr; }
 .creature figure img { max-height: 390px; object-fit: cover; object-position: 50% 55%; }
-.trust, .faq { border-top: 1px solid var(--line); align-items: start; grid-template-columns: .85fr 1.15fr; }
-.trust p + p { margin-top: 12px; }
+.technology, .faq { border-top: 1px solid var(--line); }
+.stack { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; list-style: none; margin: 0; padding: 0; }
+.stack li { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: clamp(16px, 2.4vw, 26px); }
+.stack-mark { display: inline-grid; place-items: center; min-width: 44px; height: 44px; border-radius: 9px; padding-inline: 8px; font-size: .76rem; font-weight: 750; color: var(--forest); }
+.stack-role { margin-block: 14px 4px; font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stack-copy { color: var(--muted); font-size: .9rem; margin-top: 8px; }
+.stack-note { margin-top: 18px; padding: 18px 20px; border-inline-start: 3px solid #ad7827; background: #f3e5c7; }
+.stack-note p { margin-top: 6px; }
+.stack-note .text-link { margin-top: 8px; }
+.faq { align-items: start; grid-template-columns: .85fr 1.15fr; }
 .questions details { border-bottom: 1px solid var(--line); }
 .questions details:first-child { border-top: 1px solid var(--line); }
 .questions summary { cursor: pointer; min-height: 48px; padding: 14px 24px 14px 0; font-weight: 700; }
@@ -111,7 +119,8 @@ h3 { line-height: 1.25; font-size: 1.12rem; letter-spacing: -.025em; }
 @media (max-width: 800px) {
   .header { min-height: 68px; gap: 0 8px; flex-wrap: wrap; padding-top: 10px; }
   .header nav { order: 1; flex-basis: 100%; }
-  .hero, .journey-inner, .spotlight, .creature, .trust, .faq { grid-template-columns: 1fr; }
+  .hero, .journey-inner, .spotlight, .creature, .faq { grid-template-columns: 1fr; }
+  .stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero { padding-block: 18px 0; gap: 14px; }
   .hero-copy { padding-block: 12px; }
   .hero-visual { min-height: 430px; padding-right: 8%; }
@@ -127,6 +136,7 @@ h3 { line-height: 1.25; font-size: 1.12rem; letter-spacing: -.025em; }
   .hero-visual { min-height: 350px; border-bottom-right-radius: 48px; }
   .hero-visual figcaption { left: 14px; bottom: 21px; }
   .feature-grid { grid-template-columns: 1fr; }
+  .stack { grid-template-columns: 1fr; }
   .feature-top { margin-bottom: 15px; }
   .gallery { grid-template-columns: 1fr; gap: 26px; }
   .screen-stage { padding-block: 15px; }

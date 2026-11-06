@@ -29,6 +29,17 @@ const steps = [
   ['Take the scenic route', 'Opt into journey tracking and check for creature encounters at supported stops.'],
 ];
 
+const stack = [
+  ['FL', 'Mobile app', 'Flutter', 'Shared Android and iOS app code for planning trips, exploring places and playing Creature Trails.'],
+  ['SB', 'Backend API', 'Spring Boot', 'Java services handle accounts, trips, discovery, AI requests and game progress through a gateway.'],
+  ['OSM', 'Map data', 'OpenStreetMap', 'Provides map data for the in-app view. A separate routing service supplies directions when configured.'],
+  ['OR', 'Database', 'Oracle', 'Stores accounts, trips and other app records in the documented laptop setup.'],
+  ['PG', 'Deployment option', 'PostgreSQL', 'Supported by the repository’s PostgreSQL profiles and database migrations.'],
+  ['RD', 'Cache and messaging', 'Redis', 'Supports caching, rate limiting and live chat events across backend instances.'],
+  ['MQ', 'Job queue', 'RabbitMQ', 'Carries background jobs and events, including notification delivery.'],
+  ['DK', 'Infrastructure', 'Docker', 'Packages the backend services and their dependencies for the documented local setup.'],
+];
+
 const screens = [
   ['itinerary.jpg', 390, 844, 'Itinerary', 'A sample trip in the app’s demo mode.', 'Sample Siem Reap itinerary with day tabs and activities'],
   ['map.jpg', 600, 1287, 'In-app map', 'An Android test capture of Phnom Penh with route controls.', 'OpenStreetMap view of Phnom Penh with destination pins and driving directions controls'],
@@ -80,7 +91,7 @@ export function renderPage({ origin = '', preview = false } = {}) {
   <header class="header wrap">
     ${brand}
     <nav aria-label="Main navigation">
-      <a href="#features">Features</a><a href="#screens">App screens</a><a href="#faq">FAQ</a>
+      <a href="#features">Features</a><a href="#screens">App screens</a><a href="#technology">Tech stack</a><a href="#faq">FAQ</a>
     </nav>
     <a class="header-cta" href="#testing">Testing access ${arrow}</a>
   </header>
@@ -124,9 +135,18 @@ export function renderPage({ origin = '', preview = false } = {}) {
       <div><p class="eyebrow"><span></span> Creature Trails</p><h2 id="creature-title">A little fantasy<br>along the way.</h2><p class="section-copy">Record a journey, stop somewhere safe, and look for original fantasy creatures inspired by Cambodian settings. Encounters and rewards are part of the game.</p><p class="fine">Requires foreground GPS, an account and a connected backend.</p></div>
       <figure><img src="/assets/creatures.jpg" width="880" height="675" loading="lazy" alt="Original low-poly serpent and River Makara characters in the Creature Trails encounter scene"><figcaption>Original in-game artwork · cropped from an Android test capture</figcaption></figure>
     </section>
-    <section class="section wrap trust" aria-labelledby="trust-title">
-      <div><p class="eyebrow"><span></span> Technology and trust</p><h2 id="trust-title">Built for the journey.</h2></div>
-      <div><p>Flutter powers the app. Its Spring Boot backend runs with Docker and Redis. The documented laptop setup uses Oracle, and the repository includes PostgreSQL deployment profiles and migrations.</p><p>AI and directions require configured provider services. Journey tracking is opt-in and pauses when you leave its screen or background the app. For account or privacy requests, contact support.</p><a class="text-link" href="${legal}/privacy.html">Privacy draft ${arrow}</a></div>
+    <section class="section wrap technology" id="technology" aria-labelledby="technology-title">
+      <div class="section-heading">
+        <p class="eyebrow"><span></span> Under the hood</p>
+        <h2 id="technology-title">Technology stack.</h2>
+        <p class="section-copy">The Flutter app talks to a Spring Boot API. Backend services handle trip data, background jobs and configured travel providers.</p>
+      </div>
+      <ul class="stack">${stack.map(([mark, role, name, description], i) => `<li><span class="stack-mark tone-${i % 3}" aria-hidden="true">${mark}</span><p class="stack-role">${role}</p><h3>${name}</h3><p class="stack-copy">${description}</p></li>`).join('')}</ul>
+      <aside class="stack-note" aria-labelledby="trust-title">
+        <h3 id="trust-title">Providers and privacy</h3>
+        <p>AI and directions require configured provider services. Journey tracking is opt-in and pauses when you leave its screen or background the app.</p>
+        <a class="text-link" href="${legal}/privacy.html">Privacy draft ${arrow}</a>
+      </aside>
     </section>
     <section class="section wrap faq" id="faq" aria-labelledby="faq-title">
       <div><p class="eyebrow"><span></span> Good to know</p><h2 id="faq-title">Before you go.</h2></div>
